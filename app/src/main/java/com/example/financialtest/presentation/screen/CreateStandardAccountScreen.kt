@@ -1,10 +1,9 @@
+// This is screen for creating CHECKING, SAVINGS and CASH_WALLET account type
 package com.example.financialtest.presentation.screen
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
@@ -19,7 +18,7 @@ import com.example.financialtest.domain.model.AccountType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateAccountScreen(
+fun CreateStandardAccountScreen(
     accountType: AccountType,
     onBackClick: () -> Unit,
     onSaveClick: () -> Unit

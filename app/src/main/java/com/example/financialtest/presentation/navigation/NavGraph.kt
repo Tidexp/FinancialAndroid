@@ -14,7 +14,7 @@ import com.example.financialtest.domain.model.AccountType
 @Composable
 fun NavGraph(navController: NavHostController) {
     val viewModel: FinancialViewModel = viewModel()
-    
+
     NavHost(
         navController = navController,
         startDestination = Screen.Accounts.route
@@ -27,44 +27,102 @@ fun NavGraph(navController: NavHostController) {
                 }
             )
         }
+
         composable(Screen.SelectAccountType.route) {
             SelectAccountTypeScreen(
                 onBackClick = { navController.popBackStack() },
                 onTypeSelected = { type ->
                     when (type) {
+                        // Nhóm các loại dùng chung giao diện Standard
                         AccountType.CHECKING,
                         AccountType.SAVINGS,
                         AccountType.CASH_WALLET -> {
-                            navController.navigate("create_account/${type.name}")
+                            navController.navigate("create_standard_account/${type.name}")
+                        }
+                        // Điều hướng sang màn hình Credit riêng biệt
+                        AccountType.CREDIT -> {
+                            navController.navigate("create_credit_account")
+                        }
+                        AccountType.LOAN -> { // Thêm route cho Loan
+                            navController.navigate("create_loan_account")
+                        }
+                        // Trong SelectAccountTypeScreen -> onTypeSelected
+                        AccountType.INVESTMENT -> {
+                            navController.navigate("create_investment_account")
+                        }
+                        AccountType.FOREX -> {
+                            navController.navigate("create_forex_crypto_account")
                         }
                         else -> {
-                            // Leave other types blank for now
+                            // Các loại khác như LOAN, INVESTMENT
                         }
                     }
                 }
             )
         }
+
+        // 1. Màn hình tạo tài khoản TIÊU CHUẨN (CHECKING, SAVINGS and CASH_WALLET)
         composable(
-            route = Screen.CreateAccount.route,
+            route = "create_standard_account/{type}",
             arguments = listOf(navArgument("type") { type = NavType.StringType })
         ) { backStackEntry ->
             val typeName = backStackEntry.arguments?.getString("type")
             val accountType = AccountType.valueOf(typeName ?: AccountType.CHECKING.name)
-            CreateAccountScreen(
+
+            CreateStandardAccountScreen(
                 accountType = accountType,
                 onBackClick = { navController.popBackStack() },
                 onSaveClick = {
-                    // Logic to save account
+                    // Logic lưu tài khoản tiêu chuẩn
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
                 }
             )
         }
+
+        // 2. Màn hình tạo tài khoản TÍN DỤNG (Credit) mới thêm
+        composable(route = "create_credit_account") {
+            CreateCreditAccountScreen(
+                onBackClick = { navController.popBackStack() },
+                onSaveClick = {
+                    // Logic lưu tài khoản tín dụng
+                    navController.popBackStack(Screen.Accounts.route, inclusive = false)
+                }
+            )
+        }
+
+        // Màn hình tạo tài khoản LOAN
+        composable("create_loan_account") {
+            CreateLoanAccountScreen(
+                onBackClick = { navController.popBackStack() },
+                onSaveClick = { navController.popBackStack() }
+            )
+        }
+
+        // Màn hình tạo tài khoản INVESMENT
+        composable("create_investment_account") {
+            CreateInvestmentAccountScreen(
+                onBackClick = { navController.popBackStack() },
+                onNextClick = {
+                    // Điều hướng tới bước thiết lập Portfolio hoặc lưu
+                    navController.popBackStack(Screen.Accounts.route, inclusive = false)
+                }
+            )
+        }
+
+        composable("create_forex_crypto_account") {
+            CreateForexCryptoAccountScreen(
+                onBackClick = { navController.popBackStack() },
+                onNextClick = {
+                    // Có thể mở một BottomSheet hoặc màn hình chọn sàn giao dịch (Exchange/Wallet)
+                }
+            )
+        }
+
+        // Các route khác giữ nguyên
         composable(Screen.Budgets.route) {
-            // Reusing statistics as a placeholder for budgets
             StatisticsScreen(viewModel = viewModel)
         }
         composable(Screen.Scheduled.route) {
-            // Placeholder
             ProfileScreen()
         }
         composable(Screen.Reports.route) {
