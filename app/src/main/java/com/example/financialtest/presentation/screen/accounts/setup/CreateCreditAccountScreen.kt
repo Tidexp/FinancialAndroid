@@ -1,4 +1,4 @@
-package com.example.financialtest.presentation.screen
+package com.example.financialtest.presentation.screen.accounts.setup
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

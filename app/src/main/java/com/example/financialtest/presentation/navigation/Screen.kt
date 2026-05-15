@@ -12,6 +12,9 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object Settings : Screen("settings", "Settings", Icons.Default.Settings)
     object SelectAccountType : Screen("select_account_type", "Select Account Type", Icons.Default.Add)
     object CreateAccount : Screen("create_account/{type}", "Create Account", Icons.Default.Add)
+    object AddExpenseBudget : Screen("add_expense_budget", "Add Expense Budget", Icons.Default.Add)
+    object AddIncomeBudget : Screen("add_income_budget", "Add Income Budget", Icons.Default.Add)
+    object AddBudgetsGroup : Screen("add_budgets_group", "Add Budgets Group", Icons.Default.Add)
 }
 
 val bottomNavItems = listOf(

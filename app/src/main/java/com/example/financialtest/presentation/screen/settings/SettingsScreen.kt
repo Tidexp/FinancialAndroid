@@ -1,4 +1,4 @@
-package com.example.financialtest.presentation.screen
+package com.example.financialtest.presentation.screen.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun ProfileScreen() {
+fun SettingsScreen() {
     Column(
         modifier = Modifier
             .fillMaxSize()

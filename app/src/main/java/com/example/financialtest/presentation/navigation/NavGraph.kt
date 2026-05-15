@@ -1,19 +1,29 @@
 package com.example.financialtest.presentation.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.material3.Text
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
-import com.example.financialtest.presentation.screen.*
+import com.example.financialtest.presentation.screen.accounts.AccountsScreen
+import com.example.financialtest.presentation.screen.accounts.setup.*
+import com.example.financialtest.presentation.screen.budgets.BudgetsScreen
+import com.example.financialtest.presentation.screen.reports.ReportsScreen
+import com.example.financialtest.presentation.screen.scheduled.ScheduledScreen
+import com.example.financialtest.presentation.screen.settings.SettingsScreen
 import com.example.financialtest.presentation.viewmodel.FinancialViewModel
 import com.example.financialtest.domain.model.AccountType
 
 @Composable
 fun NavGraph(navController: NavHostController) {
-    val viewModel: FinancialViewModel = viewModel()
+    val viewModel: FinancialViewModel = viewModel(factory = FinancialViewModel.Factory)
 
     NavHost(
         navController = navController,
@@ -120,16 +130,44 @@ fun NavGraph(navController: NavHostController) {
 
         // Các route khác giữ nguyên
         composable(Screen.Budgets.route) {
-            StatisticsScreen(viewModel = viewModel)
+            BudgetsScreen(
+                viewModel = viewModel,
+                onAddExpenseBudgetClick = {
+                    navController.navigate(Screen.AddExpenseBudget.route)
+                },
+                onAddIncomeBudgetClick = {
+                    navController.navigate(Screen.AddIncomeBudget.route)
+                },
+                onAddBudgetsGroupClick = {
+                    navController.navigate(Screen.AddBudgetsGroup.route)
+                }
+            )
+        }
+
+        composable(Screen.AddExpenseBudget.route) {
+            // TODO: Create AddExpenseBudgetScreen
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Add Expense Budget Screen")
+            }
+        }
+
+        composable(Screen.AddIncomeBudget.route) {
+            // TODO: Create AddIncomeBudgetScreen
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("Add Income Budget Screen")
+            }
         }
         composable(Screen.Scheduled.route) {
-            ProfileScreen()
+            ScheduledScreen(viewModel = viewModel)
         }
         composable(Screen.Reports.route) {
-            StatisticsScreen(viewModel = viewModel)
+            ReportsScreen(viewModel = viewModel)
         }
         composable(Screen.Settings.route) {
-            ProfileScreen()
+            SettingsScreen()
         }
     }
 }
+
+
+

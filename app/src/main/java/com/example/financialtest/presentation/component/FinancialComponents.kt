@@ -62,6 +62,7 @@ fun NetWorthCard(data: BalanceData) {
             ) {
                 SummaryItem("INCOME", data.totalIncome, Color(0xFF4CAF50), Modifier.weight(1f))
                 SummaryItem("EXPENSES", data.totalExpenses, Color(0xFFF44336), Modifier.weight(1f))
+                SummaryItem("LIABILITIES", data.liabilities, Color(0xFFFF9800), Modifier.weight(1f))
             }
             Spacer(modifier = Modifier.height(16.dp))
             Text(

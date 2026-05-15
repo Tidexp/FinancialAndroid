@@ -1,4 +1,4 @@
-package com.example.financialtest.presentation.screen
+package com.example.financialtest.presentation.screen.accounts.setup
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,18 +17,25 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
+// Màu xanh lá đậm đặc trưng cho Loan Account trong ảnh mẫu
+val LoanPrimaryColor = Color(0xFF4CAF50)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateForexCryptoAccountScreen(
+fun CreateLoanAccountScreen(
     onBackClick: () -> Unit,
-    onNextClick: () -> Unit
+    onSaveClick: () -> Unit
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
 
-    // --- State Hoisting ---
+    // --- State Hoisting cho Loan ---
     var accountName by remember { mutableStateOf("") }
-    var currency by remember { mutableStateOf("USD (US Dollar)") }
+    var principalAmount by remember { mutableStateOf("0,00 USD") }
+    var apr by remember { mutableStateOf("") }
+    var duration by remember { mutableStateOf("Select") }
+    var startDate by remember { mutableStateOf("10 May 2026") }
+    var firstDueDate by remember { mutableStateOf("10 May 2026") }
 
     var additionalInfo by remember { mutableStateOf("") }
     var includeInNetWorth by remember { mutableStateOf(true) }
@@ -38,7 +46,7 @@ fun CreateForexCryptoAccountScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "Create a Forex / Cry...",
+                        "Create a Loan Accou...",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -50,15 +58,14 @@ fun CreateForexCryptoAccountScreen(
                     }
                 },
                 actions = {
-                    // Nút Next màu xanh nhạt theo mẫu ảnh Forex/Crypto
                     Button(
-                        onClick = onNextClick,
+                        onClick = onSaveClick,
                         shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE3F2FD)),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black), // Nút Save màu đen theo mẫu
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
-                        Text("Next", fontWeight = FontWeight.Bold, color = Color(0xFF2196F3))
+                        Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF8F9FA))
@@ -103,13 +110,18 @@ fun CreateForexCryptoAccountScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     if (selectedTabIndex == 0) {
-                        ForexBasicFields(
+                        LoanBasicFields(
                             accountName = accountName,
                             onNameChange = { accountName = it },
-                            currency = currency
+                            principalAmount = principalAmount,
+                            apr = apr,
+                            onAprChange = { apr = it },
+                            duration = duration,
+                            startDate = startDate,
+                            firstDueDate = firstDueDate
                         )
                     } else {
-                        ForexAdvancedFields(
+                        LoanAdvancedFields(
                             additionalInfo = additionalInfo,
                             onInfoChange = { additionalInfo = it },
                             includeInNetWorth = includeInNetWorth,
@@ -125,12 +137,18 @@ fun CreateForexCryptoAccountScreen(
 }
 
 @Composable
-fun ForexBasicFields(
+fun LoanBasicFields(
     accountName: String,
     onNameChange: (String) -> Unit,
-    currency: String
+    principalAmount: String,
+    apr: String,
+    onAprChange: (String) -> Unit,
+    duration: String,
+    startDate: String,
+    firstDueDate: String
 ) {
     Column {
+        // Tên tài khoản
         ListItem(
             leadingContent = { Icon(Icons.Default.Edit, null, tint = Color.Gray) },
             headlineContent = {
@@ -148,18 +166,60 @@ fun ForexBasicFields(
                 )
             }
         )
-        ForexDivider()
+        LoanDivider()
 
-        ClickableForexItem(Icons.AutoMirrored.Filled.ShowChart, "Icon", "Default")
-        ForexDivider()
+        // Icon
+        ClickableLoanItem(Icons.AutoMirrored.Filled.ShowChart, "Icon", "Default")
+        LoanDivider()
 
-        // Currency - Trường quan trọng nhất của Forex/Crypto
-        ClickableForexItem(Icons.Default.Payments, "Currency", currency)
+        // Số tiền gốc (Principal)
+        ClickableLoanItem(Icons.Default.AddCircleOutline, "Principal amount", principalAmount)
+        LoanDivider()
+
+        // Lãi suất APR
+        ListItem(
+            leadingContent = { Icon(Icons.Default.AccountBalance, null, tint = Color.Gray) },
+            headlineContent = {
+                TextField(
+                    value = apr,
+                    onValueChange = onAprChange,
+                    placeholder = { Text("APR %") },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        )
+        LoanDivider()
+
+        // Thời hạn (Duration)
+        ClickableLoanItem(Icons.Default.Schedule, "Duration", duration)
+        LoanDivider()
+
+        // Ngày bắt đầu
+        ClickableLoanItem(Icons.Default.CalendarToday, "Start date", startDate, isDate = true)
+        LoanDivider()
+
+        // Ngày đến hạn đầu tiên
+        ClickableLoanItem(Icons.Outlined.EventNote, "First due date", firstDueDate, isDate = true)
+        LoanDivider()
+
+        // Kế hoạch trả nợ
+        ListItem(
+            modifier = Modifier.clickable { },
+            leadingContent = { Icon(Icons.Default.Description, null, tint = Color.Gray) },
+            headlineContent = { Text("Payment plan", color = Color.Gray) },
+            trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray) }
+        )
     }
 }
 
 @Composable
-fun ForexAdvancedFields(
+fun LoanAdvancedFields(
     additionalInfo: String,
     onInfoChange: (String) -> Unit,
     includeInNetWorth: Boolean,
@@ -186,45 +246,54 @@ fun ForexAdvancedFields(
                 )
             }
         )
-        ForexDivider()
+        LoanDivider()
 
         ListItem(
             leadingContent = { Icon(Icons.Default.AccountBalance, null, tint = Color.Gray) },
             headlineContent = { Text("Include in Net Worth") },
             trailingContent = { Switch(checked = includeInNetWorth, onCheckedChange = onNetWorthChange) }
         )
-        ForexDivider()
+        LoanDivider()
 
         ListItem(
             leadingContent = { Icon(Icons.Default.Group, null, tint = Color.Gray) },
             headlineContent = { Text("Include in Group balance") },
             trailingContent = { Switch(checked = includeInGroupBalance, onCheckedChange = onGroupBalanceChange) }
         )
-        ForexDivider()
+        LoanDivider()
 
-        ClickableForexItem(Icons.Default.Layers, "Put in Group", "Select")
-        ForexDivider()
+        ClickableLoanItem(Icons.Default.Layers, "Put in Group", "Select")
+        LoanDivider()
 
-        ClickableForexItem(Icons.Default.WorkOutline, "Monitored by Budgets", "None")
+        ClickableLoanItem(Icons.Default.WorkOutline, "Monitored by Budgets", "None")
     }
 }
 
 @Composable
-fun ClickableForexItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+fun ClickableLoanItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, isDate: Boolean = false) {
     ListItem(
         modifier = Modifier.clickable { },
         leadingContent = { Icon(icon, null, tint = Color.Gray) },
-        headlineContent = { Text(label, color = Color.Gray) },
+        headlineContent = { Text(label, color = if (isDate) Color.Black else Color.Gray) },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(value, color = Color.Black)
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
+                if (isDate) {
+                    Surface(
+                        color = Color(0xFFE0E0E0),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(value, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Text(value, color = Color.Black)
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
+                }
             }
         }
     )
 }
 
 @Composable
-fun ForexDivider() {
+fun LoanDivider() {
     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
 }

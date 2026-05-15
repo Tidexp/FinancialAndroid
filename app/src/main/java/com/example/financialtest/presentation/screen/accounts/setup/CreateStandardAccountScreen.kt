@@ -1,5 +1,5 @@
 // This is screen for creating CHECKING, SAVINGS and CASH_WALLET account type
-package com.example.financialtest.presentation.screen
+package com.example.financialtest.presentation.screen.accounts.setup
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*

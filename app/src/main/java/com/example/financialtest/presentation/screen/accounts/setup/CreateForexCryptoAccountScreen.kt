@@ -1,4 +1,4 @@
-package com.example.financialtest.presentation.screen
+package com.example.financialtest.presentation.screen.accounts.setup
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateInvestmentAccountScreen(
+fun CreateForexCryptoAccountScreen(
     onBackClick: () -> Unit,
     onNextClick: () -> Unit
 ) {
@@ -27,8 +27,7 @@ fun CreateInvestmentAccountScreen(
 
     // --- State Hoisting ---
     var accountName by remember { mutableStateOf("") }
-    var cashBalance by remember { mutableStateOf("0,00 USD") }
-    var asOfDate by remember { mutableStateOf("10 May 2026") }
+    var currency by remember { mutableStateOf("USD (US Dollar)") }
 
     var additionalInfo by remember { mutableStateOf("") }
     var includeInNetWorth by remember { mutableStateOf(true) }
@@ -39,7 +38,7 @@ fun CreateInvestmentAccountScreen(
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "Create an Investmen...",
+                        "Create a Forex / Cry...",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -51,11 +50,11 @@ fun CreateInvestmentAccountScreen(
                     }
                 },
                 actions = {
-                    // Nút Next theo mẫu ảnh Investment
+                    // Nút Next màu xanh nhạt theo mẫu ảnh Forex/Crypto
                     Button(
                         onClick = onNextClick,
                         shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE3F2FD)), // Màu xanh nhạt
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE3F2FD)),
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
@@ -104,14 +103,13 @@ fun CreateInvestmentAccountScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                 ) {
                     if (selectedTabIndex == 0) {
-                        InvestmentBasicFields(
+                        ForexBasicFields(
                             accountName = accountName,
                             onNameChange = { accountName = it },
-                            cashBalance = cashBalance,
-                            asOfDate = asOfDate
+                            currency = currency
                         )
                     } else {
-                        InvestmentAdvancedFields(
+                        ForexAdvancedFields(
                             additionalInfo = additionalInfo,
                             onInfoChange = { additionalInfo = it },
                             includeInNetWorth = includeInNetWorth,
@@ -127,11 +125,10 @@ fun CreateInvestmentAccountScreen(
 }
 
 @Composable
-fun InvestmentBasicFields(
+fun ForexBasicFields(
     accountName: String,
     onNameChange: (String) -> Unit,
-    cashBalance: String,
-    asOfDate: String
+    currency: String
 ) {
     Column {
         ListItem(
@@ -151,22 +148,18 @@ fun InvestmentBasicFields(
                 )
             }
         )
-        InvestmentDivider()
+        ForexDivider()
 
-        ClickableInvestmentItem(Icons.AutoMirrored.Filled.ShowChart, "Icon", "Default")
-        InvestmentDivider()
+        ClickableForexItem(Icons.AutoMirrored.Filled.ShowChart, "Icon", "Default")
+        ForexDivider()
 
-        // Cash Balance đặc thù của Investment
-        ClickableInvestmentItem(Icons.Default.AddCircleOutline, "Cash Balance", cashBalance)
-        InvestmentDivider()
-
-        // As of date
-        ClickableInvestmentItem(Icons.Default.CalendarToday, "As of date", asOfDate, isDate = true)
+        // Currency - Trường quan trọng nhất của Forex/Crypto
+        ClickableForexItem(Icons.Default.Payments, "Currency", currency)
     }
 }
 
 @Composable
-fun InvestmentAdvancedFields(
+fun ForexAdvancedFields(
     additionalInfo: String,
     onInfoChange: (String) -> Unit,
     includeInNetWorth: Boolean,
@@ -193,54 +186,45 @@ fun InvestmentAdvancedFields(
                 )
             }
         )
-        InvestmentDivider()
+        ForexDivider()
 
         ListItem(
             leadingContent = { Icon(Icons.Default.AccountBalance, null, tint = Color.Gray) },
             headlineContent = { Text("Include in Net Worth") },
             trailingContent = { Switch(checked = includeInNetWorth, onCheckedChange = onNetWorthChange) }
         )
-        InvestmentDivider()
+        ForexDivider()
 
         ListItem(
             leadingContent = { Icon(Icons.Default.Group, null, tint = Color.Gray) },
             headlineContent = { Text("Include in Group balance") },
             trailingContent = { Switch(checked = includeInGroupBalance, onCheckedChange = onGroupBalanceChange) }
         )
-        InvestmentDivider()
+        ForexDivider()
 
-        ClickableInvestmentItem(Icons.Default.Layers, "Put in Group", "Select")
-        InvestmentDivider()
+        ClickableForexItem(Icons.Default.Layers, "Put in Group", "Select")
+        ForexDivider()
 
-        ClickableInvestmentItem(Icons.Default.WorkOutline, "Monitored by Budgets", "None")
+        ClickableForexItem(Icons.Default.WorkOutline, "Monitored by Budgets", "None")
     }
 }
 
 @Composable
-fun ClickableInvestmentItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, isDate: Boolean = false) {
+fun ClickableForexItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
     ListItem(
         modifier = Modifier.clickable { },
         leadingContent = { Icon(icon, null, tint = Color.Gray) },
         headlineContent = { Text(label, color = Color.Gray) },
         trailingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isDate) {
-                    Surface(
-                        color = Color(0xFFF1F3F4),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(value, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp), fontWeight = FontWeight.Bold)
-                    }
-                } else {
-                    Text(value, color = Color.Black)
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
-                }
+                Text(value, color = Color.Black)
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
             }
         }
     )
 }
 
 @Composable
-fun InvestmentDivider() {
+fun ForexDivider() {
     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
 }

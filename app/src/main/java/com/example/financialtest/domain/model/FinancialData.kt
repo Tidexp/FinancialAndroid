@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.*
 
 data class BalanceData(
     val netWorth: String,
+    val liabilities: String,
     val totalIncome: String,
     val totalExpenses: String,
     val monthlyBudget: Float // 0.0 to 1.0
@@ -34,6 +35,16 @@ enum class AccountType(val displayName: String, val description: String, val ico
 data class CategorySpending(
     val label: String,
     val amount: String,
+    val progress: Float,
+    val color: Color
+)
+
+data class Budget(
+    val id: String,
+    val name: String,
+    val amount: String,
+    val spent: String,
+    val remaining: String,
     val progress: Float,
     val color: Color
 )
