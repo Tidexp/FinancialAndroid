@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.financialtest"
+    namespace = "com.example.financial"
     compileSdk = 35
 
     defaultConfig {
