@@ -162,7 +162,11 @@ fun NavGraph(navController: NavHostController) {
                 AccountDetailScreen(
                     account = account,
                     groupName = uiState.accountGroups.find { it.id == account.groupId }?.name,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onDeleteClick = { 
+                        viewModel.deleteAccount(it)
+                        navController.popBackStack()
+                    }
                 )
             }
         }

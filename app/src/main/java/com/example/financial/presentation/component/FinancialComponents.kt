@@ -102,7 +102,10 @@ fun SummaryItem(label: String, amount: String, color: Color, modifier: Modifier 
 }
 
 @Composable
-fun AccountGroupItem(group: AccountGroup) {
+fun AccountGroupItem(
+    group: AccountGroup,
+    onDeleteClick: (AccountGroup) -> Unit = {}
+) {
     Surface(
         onClick = { /* TODO: Open group details */ },
         modifier = Modifier.fillMaxWidth(),
@@ -151,6 +154,15 @@ fun AccountGroupItem(group: AccountGroup) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+            
+            IconButton(onClick = { onDeleteClick(group) }) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete Group",
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                )
+            }
+
             Icon(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = null,
@@ -183,7 +195,7 @@ fun AccountItem(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.AccountBalanceWallet,
+                    imageVector = account.type.icon,
                     contentDescription = null,
                     tint = account.color,
                     modifier = Modifier.size(20.dp)

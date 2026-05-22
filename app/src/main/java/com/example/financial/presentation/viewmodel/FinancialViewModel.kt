@@ -106,6 +106,31 @@ class FinancialViewModel(
         }
     }
 
+    fun deleteAccountGroup(group: AccountGroup) {
+        viewModelScope.launch {
+            // Optional: Handle accounts belonging to this group (maybe set groupId to null)
+            repository.deleteAccountGroup(group)
+        }
+    }
+
+    fun deleteAccount(account: Account) {
+        viewModelScope.launch {
+            repository.deleteAccount(account)
+        }
+    }
+
+    fun updateAccount(account: Account) {
+        viewModelScope.launch {
+            repository.updateAccount(account)
+        }
+    }
+
+    fun updateAccountGroup(group: AccountGroup) {
+        viewModelScope.launch {
+            repository.updateAccountGroup(group)
+        }
+    }
+
     fun addCreditAccount(
         name: String,
         balance: String,

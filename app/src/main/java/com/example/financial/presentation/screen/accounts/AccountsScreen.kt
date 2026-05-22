@@ -225,7 +225,10 @@ fun AccountsScreen(
             // Logic: Duyệt qua các group, hiển thị group và các account thuộc group đó
             uiState.accountGroups.forEach { group ->
                 item(key = group.id) {
-                    AccountGroupItem(group)
+                    AccountGroupItem(
+                        group = group,
+                        onDeleteClick = { viewModel.deleteAccountGroup(it) }
+                    )
                 }
                 
                 val accountsInGroup = filteredAccounts.filter { it.groupId == group.id }

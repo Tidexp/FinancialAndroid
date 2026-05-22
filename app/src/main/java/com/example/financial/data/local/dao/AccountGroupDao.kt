@@ -12,6 +12,9 @@ interface AccountGroupDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGroup(group: AccountGroupEntity)
 
+    @Update
+    suspend fun updateGroup(group: AccountGroupEntity)
+
     @Delete
     suspend fun deleteGroup(group: AccountGroupEntity)
 }

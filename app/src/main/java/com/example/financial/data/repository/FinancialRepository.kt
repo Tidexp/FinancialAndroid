@@ -73,6 +73,32 @@ class FinancialRepository(
         }
     }
 
+    suspend fun updateAccount(account: Account) {
+        accountDao.updateAccount(account.toEntity())
+        try {
+            firestore.collection("users")
+                .document(userId)
+                .collection("accounts")
+                .document(account.id)
+                .set(account.toEntity())
+        } catch (e: Exception) {
+            android.util.Log.e("FinancialRepository", "Firestore update error: ${e.message}")
+        }
+    }
+
+    suspend fun deleteAccount(account: Account) {
+        accountDao.deleteAccount(account.toEntity())
+        try {
+            firestore.collection("users")
+                .document(userId)
+                .collection("accounts")
+                .document(account.id)
+                .delete()
+        } catch (e: Exception) {
+            android.util.Log.e("FinancialRepository", "Firestore delete error: ${e.message}")
+        }
+    }
+
     suspend fun addAccountGroup(group: AccountGroup) {
         accountGroupDao.insertGroup(group.toEntity())
         
@@ -84,6 +110,32 @@ class FinancialRepository(
                 .set(group.toEntity())
         } catch (e: Exception) {
             android.util.Log.e("FinancialRepository", "Firestore error: ${e.message}")
+        }
+    }
+
+    suspend fun updateAccountGroup(group: AccountGroup) {
+        accountGroupDao.updateGroup(group.toEntity())
+        try {
+            firestore.collection("users")
+                .document(userId)
+                .collection("account_groups")
+                .document(group.id)
+                .set(group.toEntity())
+        } catch (e: Exception) {
+            android.util.Log.e("FinancialRepository", "Firestore group update error: ${e.message}")
+        }
+    }
+
+    suspend fun deleteAccountGroup(group: AccountGroup) {
+        accountGroupDao.deleteGroup(group.toEntity())
+        try {
+            firestore.collection("users")
+                .document(userId)
+                .collection("account_groups")
+                .document(group.id)
+                .delete()
+        } catch (e: Exception) {
+            android.util.Log.e("FinancialRepository", "Firestore group delete error: ${e.message}")
         }
     }
 }
