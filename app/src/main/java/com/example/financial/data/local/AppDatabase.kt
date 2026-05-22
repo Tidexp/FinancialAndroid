@@ -10,7 +10,7 @@ import com.example.financial.data.local.entity.AccountEntity
 import com.example.financial.data.local.entity.AccountGroupEntity
 import com.example.financial.data.local.entity.TransactionEntity
 
-@Database(entities = [TransactionEntity::class, AccountEntity::class, AccountGroupEntity::class], version = 2, exportSchema = false)
+@Database(entities = [TransactionEntity::class, AccountEntity::class, AccountGroupEntity::class], version = 4, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao

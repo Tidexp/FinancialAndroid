@@ -22,19 +22,30 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import com.example.financial.domain.model.AccountGroup
+import androidx.compose.foundation.background
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateStandardAccountScreen(
     accountType: AccountType,
     onBackClick: () -> Unit,
-    onSaveClick: () -> Unit
+    onSaveClick: (
+        name: String,
+        balance: String,
+        type: AccountType,
+        groupId: String?,
+        autoClear: Boolean,
+        additionalInfo: String
+    ) -> Unit,
+    groups: List<AccountGroup> = emptyList()
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
 
     // Basic States
     var accountName by remember { mutableStateOf("") }
+    var openingBalance by remember { mutableStateOf("0,00 USD") }
     var selectedIcon by remember { mutableStateOf<ImageVector?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var showIconPicker by remember { mutableStateOf(false) }
@@ -44,6 +55,8 @@ fun CreateStandardAccountScreen(
     var includeInNetWorth by remember { mutableStateOf(true) }
     var includeInGroupBalance by remember { mutableStateOf(true) }
     var additionalInfo by remember { mutableStateOf("") }
+    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var showGroupPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -62,7 +75,11 @@ fun CreateStandardAccountScreen(
                 },
                 actions = {
                     Button(
-                        onClick = onSaveClick,
+                        onClick = {
+                            if (accountName.isNotBlank()) {
+                                onSaveClick(accountName, openingBalance, accountType, selectedGroupId, autoClear, additionalInfo)
+                            }
+                        },
                         shape = RoundedCornerShape(50),
                         contentPadding = PaddingValues(horizontal = 20.dp, vertical = 0.dp),
                         modifier = Modifier.padding(end = 8.dp)
@@ -109,6 +126,8 @@ fun CreateStandardAccountScreen(
                 BasicTabContent(
                     accountName = accountName,
                     onNameChange = { accountName = it },
+                    openingBalance = openingBalance,
+                    onBalanceChange = { openingBalance = it },
                     selectedIcon = selectedIcon,
                     selectedImageUri = selectedImageUri,
                     onIconClick = { showIconPicker = true },
@@ -122,7 +141,9 @@ fun CreateStandardAccountScreen(
                     includeInGroupBalance = includeInGroupBalance,
                     onGroupBalanceChange = { includeInGroupBalance = it },
                     additionalInfo = additionalInfo,
-                    onInfoChange = { additionalInfo = it }
+                    onInfoChange = { additionalInfo = it },
+                    selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "Select",
+                    onGroupClick = { showGroupPicker = true }
                 )
             }
         }
@@ -140,6 +161,34 @@ fun CreateStandardAccountScreen(
                 }
             )
         }
+
+        if (showGroupPicker) {
+            ModalBottomSheet(onDismissRequest = { showGroupPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Group", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedGroupId = null
+                            showGroupPicker = false 
+                        },
+                        headlineContent = { Text("None") }
+                    )
+                    groups.forEach { group ->
+                        ListItem(
+                            modifier = Modifier.clickable { 
+                                selectedGroupId = group.id
+                                showGroupPicker = false 
+                            },
+                            headlineContent = { Text(group.name) },
+                            leadingContent = { 
+                                Box(modifier = Modifier.size(24.dp).background(group.color, CircleShape))
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -147,6 +196,8 @@ fun CreateStandardAccountScreen(
 fun BasicTabContent(
     accountName: String,
     onNameChange: (String) -> Unit,
+    openingBalance: String,
+    onBalanceChange: (String) -> Unit,
     selectedIcon: ImageVector?,
     selectedImageUri: Uri?,
     onIconClick: () -> Unit,
@@ -210,10 +261,20 @@ fun BasicTabContent(
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
 
-                ClickableListItem(
-                    leadingIcon = Icons.Default.AddCircleOutline,
-                    label = "Opening balance",
-                    value = "0,00 USD"
+                ListItem(
+                    leadingContent = { Icon(Icons.Default.AddCircleOutline, contentDescription = null, tint = Color.Gray) },
+                    headlineContent = {
+                        TextField(
+                            value = openingBalance,
+                            onValueChange = onBalanceChange,
+                            label = { Text("Opening balance", color = Color.Gray) },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
 
@@ -236,7 +297,9 @@ fun AdvancedTabContent(
     includeInGroupBalance: Boolean,
     onGroupBalanceChange: (Boolean) -> Unit,
     additionalInfo: String,
-    onInfoChange: (String) -> Unit
+    onInfoChange: (String) -> Unit,
+    selectedGroupName: String,
+    onGroupClick: () -> Unit
 ) {
     Column(modifier = Modifier.padding(16.dp)) {
         Card(
@@ -287,7 +350,8 @@ fun AdvancedTabContent(
                 ClickableListItem(
                     leadingIcon = Icons.Default.Layers,
                     label = "Put in Group",
-                    value = "Select"
+                    value = selectedGroupName,
+                    onClick = onGroupClick
                 )
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp)
 
@@ -302,9 +366,14 @@ fun AdvancedTabContent(
 }
 
 @Composable
-fun ClickableListItem(leadingIcon: ImageVector, label: String, value: String) {
+fun ClickableListItem(
+    leadingIcon: ImageVector,
+    label: String,
+    value: String,
+    onClick: () -> Unit = {}
+) {
     ListItem(
-        modifier = Modifier.clickable { },
+        modifier = Modifier.clickable { onClick() },
         leadingContent = { Icon(leadingIcon, contentDescription = null, tint = Color.Gray) },
         headlineContent = { Text(label) },
         trailingContent = {

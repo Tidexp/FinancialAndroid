@@ -25,7 +25,8 @@ import com.example.financial.presentation.viewmodel.FinancialViewModel
 fun AccountsScreen(
     viewModel: FinancialViewModel,
     onAddAccountClick: () -> Unit,
-    onAddGroupClick: () -> Unit
+    onAddGroupClick: () -> Unit,
+    onAccountClick: (String) -> Unit
 ) {
     val uiState by viewModel.homeUiState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -221,14 +222,35 @@ fun AccountsScreen(
                 )
             }
         } else {
-            // Hiển thị các Account Group trước
-            items(uiState.accountGroups) { group ->
-                AccountGroupItem(group)
+            // Logic: Duyệt qua các group, hiển thị group và các account thuộc group đó
+            uiState.accountGroups.forEach { group ->
+                item(key = group.id) {
+                    AccountGroupItem(group)
+                }
+                
+                val accountsInGroup = filteredAccounts.filter { it.groupId == group.id }
+                items(accountsInGroup, key = { it.id }) { account ->
+                    Box(modifier = Modifier.padding(start = 16.dp)) {
+                        AccountItem(account, onClick = { onAccountClick(it.id) })
+                    }
+                }
             }
             
-            // Hiển thị các Account độc lập (hoặc có thể gom vào group sau này)
-            items(filteredAccounts) { account ->
-                AccountItem(account)
+            // Hiển thị các Account không thuộc group nào (Ungrouped)
+            val unGroupedAccounts = filteredAccounts.filter { it.groupId == null }
+            if (unGroupedAccounts.isNotEmpty()) {
+                if (uiState.accountGroups.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Ungrouped",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+                items(unGroupedAccounts, key = { it.id }) { account ->
+                    AccountItem(account, onClick = { onAccountClick(it.id) })
+                }
             }
         }
 

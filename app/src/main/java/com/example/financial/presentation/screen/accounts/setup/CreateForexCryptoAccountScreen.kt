@@ -1,5 +1,6 @@
 package com.example.financial.presentation.screen.accounts.setup
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,12 +16,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.AccountGroup
+import androidx.compose.foundation.shape.CircleShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateForexCryptoAccountScreen(
     onBackClick: () -> Unit,
-    onNextClick: () -> Unit
+    onSaveClick: (
+        name: String,
+        currency: String,
+        groupId: String?,
+        additionalInfo: String
+    ) -> Unit,
+    groups: List<AccountGroup> = emptyList()
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
@@ -32,13 +41,15 @@ fun CreateForexCryptoAccountScreen(
     var additionalInfo by remember { mutableStateOf("") }
     var includeInNetWorth by remember { mutableStateOf(true) }
     var includeInGroupBalance by remember { mutableStateOf(true) }
+    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var showGroupPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "Create a Forex / Cry...",
+                        "Create a Forex / Crypto Account",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -50,15 +61,19 @@ fun CreateForexCryptoAccountScreen(
                     }
                 },
                 actions = {
-                    // Nút Next màu xanh nhạt theo mẫu ảnh Forex/Crypto
+                    // Nút Save cho Forex/Crypto
                     Button(
-                        onClick = onNextClick,
+                        onClick = {
+                            if (accountName.isNotBlank()) {
+                                onSaveClick(accountName, currency, selectedGroupId, additionalInfo)
+                            }
+                        },
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE3F2FD)),
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
-                        Text("Next", fontWeight = FontWeight.Bold, color = Color(0xFF2196F3))
+                        Text("Save", fontWeight = FontWeight.Bold, color = Color(0xFF2196F3))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF8F9FA))
@@ -115,7 +130,38 @@ fun CreateForexCryptoAccountScreen(
                             includeInNetWorth = includeInNetWorth,
                             onNetWorthChange = { includeInNetWorth = it },
                             includeInGroupBalance = includeInGroupBalance,
-                            onGroupBalanceChange = { includeInGroupBalance = it }
+                            onGroupBalanceChange = { includeInGroupBalance = it },
+                            selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "Select",
+                            onGroupClick = { showGroupPicker = true }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        if (showGroupPicker) {
+            ModalBottomSheet(onDismissRequest = { showGroupPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Group", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedGroupId = null
+                            showGroupPicker = false 
+                        },
+                        headlineContent = { Text("None") }
+                    )
+                    groups.forEach { group ->
+                        ListItem(
+                            modifier = Modifier.clickable { 
+                                selectedGroupId = group.id
+                                showGroupPicker = false 
+                            },
+                            headlineContent = { Text(group.name) },
+                            leadingContent = { 
+                                Box(modifier = Modifier.size(24.dp).background(group.color, CircleShape))
+                            }
                         )
                     }
                 }
@@ -153,7 +199,7 @@ fun ForexBasicFields(
         ClickableForexItem(Icons.AutoMirrored.Filled.ShowChart, "Icon", "Default")
         ForexDivider()
 
-        // Currency - Trường quan trọng nhất của Forex/Crypto
+        // Currency
         ClickableForexItem(Icons.Default.Payments, "Currency", currency)
     }
 }
@@ -165,7 +211,9 @@ fun ForexAdvancedFields(
     includeInNetWorth: Boolean,
     onNetWorthChange: (Boolean) -> Unit,
     includeInGroupBalance: Boolean,
-    onGroupBalanceChange: (Boolean) -> Unit
+    onGroupBalanceChange: (Boolean) -> Unit,
+    selectedGroupName: String,
+    onGroupClick: () -> Unit
 ) {
     Column {
         ListItem(
@@ -202,7 +250,12 @@ fun ForexAdvancedFields(
         )
         ForexDivider()
 
-        ClickableForexItem(Icons.Default.Layers, "Put in Group", "Select")
+        ClickableForexItem(
+            icon = Icons.Default.Layers,
+            label = "Put in Group",
+            value = selectedGroupName,
+            onClick = onGroupClick
+        )
         ForexDivider()
 
         ClickableForexItem(Icons.Default.WorkOutline, "Monitored by Budgets", "None")
@@ -210,9 +263,14 @@ fun ForexAdvancedFields(
 }
 
 @Composable
-fun ClickableForexItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+fun ClickableForexItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    onClick: () -> Unit = {}
+) {
     ListItem(
-        modifier = Modifier.clickable { },
+        modifier = Modifier.clickable { onClick() },
         leadingContent = { Icon(icon, null, tint = Color.Gray) },
         headlineContent = { Text(label, color = Color.Gray) },
         trailingContent = {

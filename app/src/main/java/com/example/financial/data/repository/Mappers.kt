@@ -45,7 +45,19 @@ fun AccountEntity.toDomain(): Account {
         balance = balance,
         type = type,
         color = Color(color),
-        groupId = groupId
+        groupId = groupId,
+        iconUri = iconUri,
+        creditLimit = creditLimit,
+        statementCloseDay = statementCloseDay,
+        autoClear = autoClear,
+        additionalInfo = additionalInfo,
+        principalAmount = principalAmount,
+        apr = apr,
+        duration = duration,
+        startDate = startDate,
+        firstDueDate = firstDueDate,
+        asOfDate = asOfDate,
+        currency = currency
     )
 }
 
@@ -56,7 +68,19 @@ fun Account.toEntity(): AccountEntity {
         balance = balance,
         type = type,
         color = color.toArgb(),
-        groupId = groupId
+        groupId = groupId,
+        iconUri = iconUri,
+        creditLimit = creditLimit,
+        statementCloseDay = statementCloseDay,
+        autoClear = autoClear,
+        additionalInfo = additionalInfo,
+        principalAmount = principalAmount,
+        apr = apr,
+        duration = duration,
+        startDate = startDate,
+        firstDueDate = firstDueDate,
+        asOfDate = asOfDate,
+        currency = currency
     )
 }
 

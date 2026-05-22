@@ -161,9 +161,12 @@ fun AccountGroupItem(group: AccountGroup) {
 }
 
 @Composable
-fun AccountItem(account: Account) {
+fun AccountItem(
+    account: Account,
+    onClick: (Account) -> Unit = {}
+) {
     Surface(
-        onClick = { /* TODO */ },
+        onClick = { onClick(account) },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)

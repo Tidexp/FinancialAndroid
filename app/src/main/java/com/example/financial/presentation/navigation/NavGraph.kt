@@ -3,6 +3,8 @@ package com.example.financial.presentation.navigation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Text
@@ -37,6 +39,9 @@ fun NavGraph(navController: NavHostController) {
                 },
                 onAddGroupClick = {
                     navController.navigate(Screen.CreateAccountGroup.route)
+                },
+                onAccountClick = { accountId ->
+                    navController.navigate("account_detail/$accountId")
                 }
             )
         }
@@ -46,64 +51,59 @@ fun NavGraph(navController: NavHostController) {
                 onBackClick = { navController.popBackStack() },
                 onTypeSelected = { type ->
                     when (type) {
-                        // Nhóm các loại dùng chung giao diện Standard
                         AccountType.CHECKING,
                         AccountType.SAVINGS,
                         AccountType.CASH_WALLET -> {
                             navController.navigate("create_standard_account/${type.name}")
                         }
-                        // Điều hướng sang màn hình Credit riêng biệt
                         AccountType.CREDIT -> {
                             navController.navigate("create_credit_account")
                         }
-                        AccountType.LOAN -> { // Thêm route cho Loan
+                        AccountType.LOAN -> {
                             navController.navigate("create_loan_account")
                         }
-                        // Trong SelectAccountTypeScreen -> onTypeSelected
                         AccountType.INVESTMENT -> {
                             navController.navigate("create_investment_account")
                         }
                         AccountType.FOREX -> {
                             navController.navigate("create_forex_crypto_account")
                         }
-                        else -> {
-                            // Các loại khác như LOAN, INVESTMENT
-                        }
                     }
                 }
             )
         }
 
-        // 1. Màn hình tạo tài khoản TIÊU CHUẨN (CHECKING, SAVINGS and CASH_WALLET)
         composable(
             route = "create_standard_account/{type}",
             arguments = listOf(navArgument("type") { type = NavType.StringType })
         ) { backStackEntry ->
             val typeName = backStackEntry.arguments?.getString("type")
             val accountType = AccountType.valueOf(typeName ?: AccountType.CHECKING.name)
+            val uiState by viewModel.homeUiState.collectAsState()
 
             CreateStandardAccountScreen(
                 accountType = accountType,
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = {
-                    // Logic lưu tài khoản tiêu chuẩn
+                onSaveClick = { name, balance, type, groupId, autoClear, info ->
+                    viewModel.addStandardAccount(name, balance, type, groupId, autoClear, info)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
-                }
+                },
+                groups = uiState.accountGroups
             )
         }
 
-        // 2. Màn hình tạo tài khoản TÍN DỤNG (Credit) mới thêm
         composable(route = "create_credit_account") {
+            val uiState by viewModel.homeUiState.collectAsState()
             CreateCreditAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = {
-                    // Logic lưu tài khoản tín dụng
+                onSaveClick = { name, balance, limit, icon, day, autoClear, info, groupId ->
+                    viewModel.addCreditAccount(name, balance, limit, icon, day, autoClear, info, groupId)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
-                }
+                },
+                groups = uiState.accountGroups
             )
         }
 
-        // Màn hình tạo nhóm tài khoản (Group)
         composable(Screen.CreateAccountGroup.route) {
             CreateAccountGroupScreen(
                 onBackClick = { navController.popBackStack() },
@@ -114,60 +114,75 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
-        // Màn hình tạo tài khoản LOAN
         composable("create_loan_account") {
+            val uiState by viewModel.homeUiState.collectAsState()
             CreateLoanAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { navController.popBackStack() }
+                onSaveClick = { name, principal, apr, duration, start, first, groupId, info ->
+                    viewModel.addLoanAccount(name, principal, apr, duration, start, first, groupId, info)
+                    navController.popBackStack(Screen.Accounts.route, inclusive = false)
+                },
+                groups = uiState.accountGroups
             )
         }
 
-        // Màn hình tạo tài khoản INVESMENT
         composable("create_investment_account") {
+            val uiState by viewModel.homeUiState.collectAsState()
             CreateInvestmentAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onNextClick = {
-                    // Điều hướng tới bước thiết lập Portfolio hoặc lưu
+                onSaveClick = { name, balance, date, groupId, info ->
+                    viewModel.addInvestmentAccount(name, balance, date, groupId, info)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
-                }
+                },
+                groups = uiState.accountGroups
             )
         }
 
-        // Màn hình tạo tài khoản FOREX/CRYPTO
         composable("create_forex_crypto_account") {
+            val uiState by viewModel.homeUiState.collectAsState()
             CreateForexCryptoAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onNextClick = {
-                    // Có thể mở một BottomSheet hoặc màn hình chọn sàn giao dịch (Exchange/Wallet)
-                }
+                onSaveClick = { name, currency, groupId, info ->
+                    viewModel.addForexAccount(name, currency, groupId, info)
+                    navController.popBackStack(Screen.Accounts.route, inclusive = false)
+                },
+                groups = uiState.accountGroups
             )
         }
 
-        // Các route khác giữ nguyên
+        composable(
+            route = "account_detail/{accountId}",
+            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getString("accountId")
+            val uiState by viewModel.homeUiState.collectAsState()
+            val account = uiState.accounts.find { it.id == accountId }
+            
+            if (account != null) {
+                AccountDetailScreen(
+                    account = account,
+                    groupName = uiState.accountGroups.find { it.id == account.groupId }?.name,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+        }
+
         composable(Screen.Budgets.route) {
             BudgetsScreen(
                 viewModel = viewModel,
-                onAddExpenseBudgetClick = {
-                    navController.navigate(Screen.AddExpenseBudget.route)
-                },
-                onAddIncomeBudgetClick = {
-                    navController.navigate(Screen.AddIncomeBudget.route)
-                },
-                onAddBudgetsGroupClick = {
-                    navController.navigate(Screen.AddBudgetsGroup.route)
-                }
+                onAddExpenseBudgetClick = { navController.navigate(Screen.AddExpenseBudget.route) },
+                onAddIncomeBudgetClick = { navController.navigate(Screen.AddIncomeBudget.route) },
+                onAddBudgetsGroupClick = { navController.navigate(Screen.AddBudgetsGroup.route) }
             )
         }
 
         composable(Screen.AddExpenseBudget.route) {
-            // TODO: Create AddExpenseBudgetScreen
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Add Expense Budget Screen")
             }
         }
 
         composable(Screen.AddIncomeBudget.route) {
-            // TODO: Create AddIncomeBudgetScreen
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text("Add Income Budget Screen")
             }

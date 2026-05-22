@@ -106,6 +106,129 @@ class FinancialViewModel(
         }
     }
 
+    fun addCreditAccount(
+        name: String,
+        balance: String,
+        creditLimit: String,
+        iconUri: String?,
+        statementCloseDay: String,
+        autoClear: Boolean,
+        additionalInfo: String,
+        groupId: String?
+    ) {
+        viewModelScope.launch {
+            val account = Account(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                balance = balance,
+                type = AccountType.CREDIT,
+                color = androidx.compose.ui.graphics.Color(0xFFE91E63), // CreditPrimaryColor
+                iconUri = iconUri,
+                creditLimit = creditLimit,
+                statementCloseDay = statementCloseDay,
+                autoClear = autoClear,
+                additionalInfo = additionalInfo,
+                groupId = groupId
+            )
+            repository.addAccount(account)
+        }
+    }
+
+    fun addLoanAccount(
+        name: String,
+        principal: String,
+        apr: String,
+        duration: String,
+        startDate: String,
+        firstDueDate: String,
+        groupId: String?,
+        additionalInfo: String
+    ) {
+        viewModelScope.launch {
+            val account = Account(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                balance = "-$principal", // Loan starts as negative
+                type = AccountType.LOAN,
+                color = androidx.compose.ui.graphics.Color(0xFF4CAF50),
+                principalAmount = principal,
+                apr = apr,
+                duration = duration,
+                startDate = startDate,
+                firstDueDate = firstDueDate,
+                groupId = groupId,
+                additionalInfo = additionalInfo
+            )
+            repository.addAccount(account)
+        }
+    }
+
+    fun addInvestmentAccount(
+        name: String,
+        cashBalance: String,
+        asOfDate: String,
+        groupId: String?,
+        additionalInfo: String
+    ) {
+        viewModelScope.launch {
+            val account = Account(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                balance = cashBalance,
+                type = AccountType.INVESTMENT,
+                color = androidx.compose.ui.graphics.Color(0xFF2196F3),
+                asOfDate = asOfDate,
+                groupId = groupId,
+                additionalInfo = additionalInfo
+            )
+            repository.addAccount(account)
+        }
+    }
+
+    fun addForexAccount(
+        name: String,
+        currency: String,
+        groupId: String?,
+        additionalInfo: String
+    ) {
+        viewModelScope.launch {
+            val account = Account(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                balance = "0.00",
+                type = AccountType.FOREX,
+                color = androidx.compose.ui.graphics.Color(0xFFFF9800),
+                currency = currency,
+                groupId = groupId,
+                additionalInfo = additionalInfo
+            )
+            repository.addAccount(account)
+        }
+    }
+
+    fun addStandardAccount(
+        name: String,
+        balance: String,
+        type: AccountType,
+        groupId: String?,
+        autoClear: Boolean,
+        additionalInfo: String
+    ) {
+        viewModelScope.launch {
+            val account = Account(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                balance = balance,
+                type = type,
+                color = androidx.compose.ui.graphics.Color(0xFF9C27B0),
+                groupId = groupId,
+                autoClear = autoClear,
+                additionalInfo = additionalInfo
+            )
+            repository.addAccount(account)
+        }
+    }
+
     private fun loadHomeData() {
         viewModelScope.launch {
             combine(
