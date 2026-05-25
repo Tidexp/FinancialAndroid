@@ -17,6 +17,8 @@ import androidx.navigation.navArgument
 import com.example.financial.presentation.screen.accounts.AccountsScreen
 import com.example.financial.presentation.screen.accounts.setup.*
 import com.example.financial.presentation.screen.budgets.BudgetsScreen
+import com.example.financial.presentation.screen.budgets.setup.CreateExpenseBudgetsScreen
+import com.example.financial.presentation.screen.budgets.setup.CreateIncomeBudgetScreen
 import com.example.financial.presentation.screen.reports.ReportsScreen
 import com.example.financial.presentation.screen.scheduled.ScheduledScreen
 import com.example.financial.presentation.screen.settings.SettingsScreen
@@ -51,28 +53,35 @@ fun NavGraph(navController: NavHostController) {
                 onBackClick = { navController.popBackStack() },
                 onTypeSelected = { type ->
                     when (type) {
+                        // Nhóm các loại dùng chung giao diện Standard
                         AccountType.CHECKING,
                         AccountType.SAVINGS,
                         AccountType.CASH_WALLET -> {
                             navController.navigate("create_standard_account/${type.name}")
                         }
+                        // Điều hướng sang màn hình Credit riêng biệt
                         AccountType.CREDIT -> {
                             navController.navigate("create_credit_account")
                         }
-                        AccountType.LOAN -> {
+                        AccountType.LOAN -> { // Thêm route cho Loan
                             navController.navigate("create_loan_account")
                         }
+                        // Trong SelectAccountTypeScreen -> onTypeSelected
                         AccountType.INVESTMENT -> {
                             navController.navigate("create_investment_account")
                         }
                         AccountType.FOREX -> {
                             navController.navigate("create_forex_crypto_account")
                         }
+                        else -> {
+                            // Các loại khác như LOAN, INVESTMENT
+                        }
                     }
                 }
             )
         }
 
+        // 1. Màn hình tạo tài khoản TIÊU CHUẨN (CHECKING, SAVINGS and CASH_WALLET)
         composable(
             route = "create_standard_account/{type}",
             arguments = listOf(navArgument("type") { type = NavType.StringType })
@@ -92,6 +101,7 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
+        // 2. Màn hình tạo tài khoản TÍN DỤNG (Credit) mới thêm
         composable(route = "create_credit_account") {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateCreditAccountScreen(
@@ -114,6 +124,7 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
+        // Màn hình tạo tài khoản LOAN
         composable("create_loan_account") {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateLoanAccountScreen(
@@ -126,6 +137,7 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
+        // Màn hình tạo tài khoản INVESMENT
         composable("create_investment_account") {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateInvestmentAccountScreen(
@@ -157,13 +169,13 @@ fun NavGraph(navController: NavHostController) {
             val accountId = backStackEntry.arguments?.getString("accountId")
             val uiState by viewModel.homeUiState.collectAsState()
             val account = uiState.accounts.find { it.id == accountId }
-            
+
             if (account != null) {
                 AccountDetailScreen(
                     account = account,
                     groupName = uiState.accountGroups.find { it.id == account.groupId }?.name,
                     onBackClick = { navController.popBackStack() },
-                    onDeleteClick = { 
+                    onDeleteClick = {
                         viewModel.deleteAccount(it)
                         navController.popBackStack()
                     }
@@ -171,25 +183,40 @@ fun NavGraph(navController: NavHostController) {
             }
         }
 
+        // Các route khác giữ nguyên
         composable(Screen.Budgets.route) {
             BudgetsScreen(
                 viewModel = viewModel,
-                onAddExpenseBudgetClick = { navController.navigate(Screen.AddExpenseBudget.route) },
-                onAddIncomeBudgetClick = { navController.navigate(Screen.AddIncomeBudget.route) },
-                onAddBudgetsGroupClick = { navController.navigate(Screen.AddBudgetsGroup.route) }
+                onAddExpenseBudgetClick = {
+                    navController.navigate(Screen.AddExpenseBudget.route)
+                },
+                onAddIncomeBudgetClick = {
+                    navController.navigate(Screen.AddIncomeBudget.route)
+                },
+                onAddBudgetsGroupClick = {
+                    navController.navigate(Screen.AddBudgetsGroup.route)
+                }
             )
         }
 
         composable(Screen.AddExpenseBudget.route) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Add Expense Budget Screen")
-            }
+            CreateExpenseBudgetsScreen(
+                onCloseClick = { navController.popBackStack() },
+                onSaveClick = {
+                    // Logic lưu budget có thể được xử lý trong ViewModel sau
+                    navController.popBackStack()
+                }
+            )
         }
 
         composable(Screen.AddIncomeBudget.route) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Add Income Budget Screen")
-            }
+            CreateIncomeBudgetScreen(
+                onCloseClick = { navController.popBackStack() },
+                onSaveClick = {
+                    // Logic lưu budget có thể được xử lý trong ViewModel sau
+                    navController.popBackStack()
+                }
+            )
         }
         composable(Screen.Scheduled.route) {
             ScheduledScreen(viewModel = viewModel)
@@ -202,3 +229,6 @@ fun NavGraph(navController: NavHostController) {
         }
     }
 }
+
+
+
