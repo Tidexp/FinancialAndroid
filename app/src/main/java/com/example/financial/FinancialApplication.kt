@@ -10,6 +10,8 @@ class FinancialApplication : Application() {
             this,
             AppDatabase::class.java,
             "financial_database"
-        ).build()
+        )
+            .fallbackToDestructiveMigration()
+            .build()
     }
 }

@@ -16,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.AccountGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.background
 
 // Màu xanh lá đậm đặc trưng cho Loan Account trong ảnh mẫu
 val LoanPrimaryColor = Color(0xFF4CAF50)
@@ -24,7 +27,17 @@ val LoanPrimaryColor = Color(0xFF4CAF50)
 @Composable
 fun CreateLoanAccountScreen(
     onBackClick: () -> Unit,
-    onSaveClick: () -> Unit
+    onSaveClick: (
+        name: String,
+        principal: String,
+        apr: String,
+        duration: String,
+        startDate: String,
+        firstDueDate: String,
+        groupId: String?,
+        additionalInfo: String
+    ) -> Unit,
+    groups: List<AccountGroup> = emptyList()
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
@@ -40,13 +53,15 @@ fun CreateLoanAccountScreen(
     var additionalInfo by remember { mutableStateOf("") }
     var includeInNetWorth by remember { mutableStateOf(true) }
     var includeInGroupBalance by remember { mutableStateOf(true) }
+    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var showGroupPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "Create a Loan Accou...",
+                        "Create a Loan Account",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -59,7 +74,20 @@ fun CreateLoanAccountScreen(
                 },
                 actions = {
                     Button(
-                        onClick = onSaveClick,
+                        onClick = {
+                            if (accountName.isNotBlank()) {
+                                onSaveClick(
+                                    accountName,
+                                    principalAmount,
+                                    apr,
+                                    duration,
+                                    startDate,
+                                    firstDueDate,
+                                    selectedGroupId,
+                                    additionalInfo
+                                )
+                            }
+                        },
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = Color.Black), // Nút Save màu đen theo mẫu
                         contentPadding = PaddingValues(horizontal = 20.dp),
@@ -114,6 +142,7 @@ fun CreateLoanAccountScreen(
                             accountName = accountName,
                             onNameChange = { accountName = it },
                             principalAmount = principalAmount,
+                            onPrincipalChange = { principalAmount = it },
                             apr = apr,
                             onAprChange = { apr = it },
                             duration = duration,
@@ -127,7 +156,38 @@ fun CreateLoanAccountScreen(
                             includeInNetWorth = includeInNetWorth,
                             onNetWorthChange = { includeInNetWorth = it },
                             includeInGroupBalance = includeInGroupBalance,
-                            onGroupBalanceChange = { includeInGroupBalance = it }
+                            onGroupBalanceChange = { includeInGroupBalance = it },
+                            selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "Select",
+                            onGroupClick = { showGroupPicker = true }
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        if (showGroupPicker) {
+            ModalBottomSheet(onDismissRequest = { showGroupPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Group", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedGroupId = null
+                            showGroupPicker = false 
+                        },
+                        headlineContent = { Text("None") }
+                    )
+                    groups.forEach { group ->
+                        ListItem(
+                            modifier = Modifier.clickable { 
+                                selectedGroupId = group.id
+                                showGroupPicker = false 
+                            },
+                            headlineContent = { Text(group.name) },
+                            leadingContent = { 
+                                Box(modifier = Modifier.size(24.dp).background(group.color, CircleShape))
+                            }
                         )
                     }
                 }
@@ -141,6 +201,7 @@ fun LoanBasicFields(
     accountName: String,
     onNameChange: (String) -> Unit,
     principalAmount: String,
+    onPrincipalChange: (String) -> Unit,
     apr: String,
     onAprChange: (String) -> Unit,
     duration: String,
@@ -173,7 +234,21 @@ fun LoanBasicFields(
         LoanDivider()
 
         // Số tiền gốc (Principal)
-        ClickableLoanItem(Icons.Default.AddCircleOutline, "Principal amount", principalAmount)
+        ListItem(
+            leadingContent = { Icon(Icons.Default.AddCircleOutline, null, tint = Color.Gray) },
+            headlineContent = {
+                TextField(
+                    value = principalAmount,
+                    onValueChange = onPrincipalChange,
+                    label = { Text("Principal amount", color = Color.Gray) },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        )
         LoanDivider()
 
         // Lãi suất APR
@@ -225,7 +300,9 @@ fun LoanAdvancedFields(
     includeInNetWorth: Boolean,
     onNetWorthChange: (Boolean) -> Unit,
     includeInGroupBalance: Boolean,
-    onGroupBalanceChange: (Boolean) -> Unit
+    onGroupBalanceChange: (Boolean) -> Unit,
+    selectedGroupName: String,
+    onGroupClick: () -> Unit
 ) {
     Column {
         ListItem(
@@ -262,7 +339,12 @@ fun LoanAdvancedFields(
         )
         LoanDivider()
 
-        ClickableLoanItem(Icons.Default.Layers, "Put in Group", "Select")
+        ClickableLoanItem(
+            icon = Icons.Default.Layers,
+            label = "Put in Group",
+            value = selectedGroupName,
+            onClick = onGroupClick
+        )
         LoanDivider()
 
         ClickableLoanItem(Icons.Default.WorkOutline, "Monitored by Budgets", "None")
@@ -270,9 +352,15 @@ fun LoanAdvancedFields(
 }
 
 @Composable
-fun ClickableLoanItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String, isDate: Boolean = false) {
+fun ClickableLoanItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String,
+    isDate: Boolean = false,
+    onClick: () -> Unit = {}
+) {
     ListItem(
-        modifier = Modifier.clickable { },
+        modifier = Modifier.clickable { onClick() },
         leadingContent = { Icon(icon, null, tint = Color.Gray) },
         headlineContent = { Text(label, color = if (isDate) Color.Black else Color.Gray) },
         trailingContent = {

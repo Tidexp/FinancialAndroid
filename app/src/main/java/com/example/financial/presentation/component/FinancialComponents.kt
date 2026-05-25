@@ -18,8 +18,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.financial.domain.model.Account
+import com.example.financial.domain.model.AccountGroup
 import com.example.financial.domain.model.BalanceData
 import com.example.financial.domain.model.Transaction
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 @Composable
 fun NetWorthCard(data: BalanceData) {
@@ -99,9 +102,83 @@ fun SummaryItem(label: String, amount: String, color: Color, modifier: Modifier 
 }
 
 @Composable
-fun AccountItem(account: Account) {
+fun AccountGroupItem(
+    group: AccountGroup,
+    onDeleteClick: (AccountGroup) -> Unit = {}
+) {
     Surface(
-        onClick = { /* TODO */ },
+        onClick = { /* TODO: Open group details */ },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(group.color.copy(alpha = 0.2f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (group.iconUri != null) {
+                    AsyncImage(
+                        model = group.iconUri,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = group.color,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Account Group",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            IconButton(onClick = { onDeleteClick(group) }) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete Group",
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+fun AccountItem(
+    account: Account,
+    onClick: (Account) -> Unit = {}
+) {
+    Surface(
+        onClick = { onClick(account) },
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
@@ -118,7 +195,7 @@ fun AccountItem(account: Account) {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.AccountBalanceWallet,
+                    imageVector = account.type.icon,
                     contentDescription = null,
                     tint = account.color,
                     modifier = Modifier.size(20.dp)

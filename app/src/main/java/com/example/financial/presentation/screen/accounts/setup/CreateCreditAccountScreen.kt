@@ -18,6 +18,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.financial.presentation.component.IconPickerBottomSheet
+import android.net.Uri
+import androidx.compose.ui.graphics.vector.ImageVector
+import coil.compose.AsyncImage
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import com.example.financial.domain.model.AccountGroup
 
 // Định nghĩa màu hồng/đỏ chủ đạo cho Credit Account
 val CreditPrimaryColor = Color(0xFFE91E63)
@@ -26,7 +34,17 @@ val CreditPrimaryColor = Color(0xFFE91E63)
 @Composable
 fun CreateCreditAccountScreen(
     onBackClick: () -> Unit,
-    onSaveClick: () -> Unit
+    onSaveClick: (
+        name: String,
+        balance: String,
+        creditLimit: String,
+        iconUri: String?,
+        statementCloseDay: String,
+        autoClear: Boolean,
+        additionalInfo: String,
+        groupId: String?
+    ) -> Unit,
+    groups: List<AccountGroup> = emptyList()
 ) {
     // --- STATE HOISTING ---
     var selectedTabIndex by remember { mutableIntStateOf(0) }
@@ -34,6 +52,9 @@ fun CreateCreditAccountScreen(
 
     // Basic States
     var accountName by remember { mutableStateOf("") }
+    var selectedIcon by remember { mutableStateOf<ImageVector?>(null) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showIconPicker by remember { mutableStateOf(false) }
     var creditLimit by remember { mutableStateOf("0,00 USD") }
     var openingBalance by remember { mutableStateOf("-0,00") }
     var balanceBoxDisplayMode by remember { mutableStateOf("Balance") }
@@ -44,14 +65,15 @@ fun CreateCreditAccountScreen(
     var includeInNetWorth by remember { mutableStateOf(true) }
     var includeInGroupBalance by remember { mutableStateOf(true) }
     var statementCloseDay by remember { mutableStateOf("31") }
-    var weekendStrategy by remember { mutableStateOf("No change") }
+    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var showGroupPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
                     Text(
-                        "Create a Credit Acco...",
+                        "Create a Credit Account",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1
@@ -64,7 +86,20 @@ fun CreateCreditAccountScreen(
                 },
                 actions = {
                     Button(
-                        onClick = onSaveClick,
+                        onClick = {
+                            if (accountName.isNotBlank()) {
+                                onSaveClick(
+                                    accountName,
+                                    openingBalance,
+                                    creditLimit,
+                                    selectedImageUri?.toString(),
+                                    statementCloseDay,
+                                    autoClear,
+                                    additionalInfo,
+                                    selectedGroupId
+                                )
+                            }
+                        },
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = CreditPrimaryColor),
                         contentPadding = PaddingValues(horizontal = 20.dp),
@@ -119,8 +154,13 @@ fun CreateCreditAccountScreen(
                         CreditBasicFields(
                             accountName = accountName,
                             onNameChange = { accountName = it },
+                            selectedIcon = selectedIcon,
+                            selectedImageUri = selectedImageUri,
+                            onIconClick = { showIconPicker = true },
                             creditLimit = creditLimit,
+                            onLimitChange = { creditLimit = it },
                             openingBalance = openingBalance,
+                            onBalanceChange = { openingBalance = it },
                             balanceBoxDisplayMode = balanceBoxDisplayMode,
                             onDisplayModeChange = { balanceBoxDisplayMode = it },
                             autoClear = autoClear,
@@ -135,12 +175,56 @@ fun CreateCreditAccountScreen(
                             includeInGroupBalance = includeInGroupBalance,
                             onGroupBalanceChange = { includeInGroupBalance = it },
                             statementCloseDay = statementCloseDay,
-                            weekendStrategy = weekendStrategy
+                            onDayChange = { statementCloseDay = it },
+                            selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "Select",
+                            onGroupClick = { showGroupPicker = true }
                         )
                     }
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        if (showIconPicker) {
+            IconPickerBottomSheet(
+                onDismiss = { showIconPicker = false },
+                onIconSelected = {
+                    selectedIcon = it
+                    selectedImageUri = null
+                },
+                onImageSelected = {
+                    selectedImageUri = it
+                    selectedIcon = null
+                }
+            )
+        }
+
+        if (showGroupPicker) {
+            ModalBottomSheet(onDismissRequest = { showGroupPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Group", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedGroupId = null
+                            showGroupPicker = false 
+                        },
+                        headlineContent = { Text("None") }
+                    )
+                    groups.forEach { group ->
+                        ListItem(
+                            modifier = Modifier.clickable { 
+                                selectedGroupId = group.id
+                                showGroupPicker = false 
+                            },
+                            headlineContent = { Text(group.name) },
+                            leadingContent = { 
+                                Box(modifier = Modifier.size(24.dp).background(group.color, CircleShape))
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -149,8 +233,13 @@ fun CreateCreditAccountScreen(
 fun CreditBasicFields(
     accountName: String,
     onNameChange: (String) -> Unit,
+    selectedIcon: ImageVector?,
+    selectedImageUri: Uri?,
+    onIconClick: () -> Unit,
     creditLimit: String,
+    onLimitChange: (String) -> Unit,
     openingBalance: String,
+    onBalanceChange: (String) -> Unit,
     balanceBoxDisplayMode: String,
     onDisplayModeChange: (String) -> Unit,
     autoClear: Boolean,
@@ -176,13 +265,69 @@ fun CreditBasicFields(
         )
         CreditDivider()
 
-        ClickableCreditItem(Icons.AutoMirrored.Filled.ShowChart, "Icon", "Default")
+        ListItem(
+            modifier = Modifier.clickable { onIconClick() },
+            leadingContent = {
+                if (selectedImageUri != null) {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(24.dp)
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = selectedIcon ?: Icons.AutoMirrored.Filled.ShowChart,
+                        contentDescription = null,
+                        tint = Color.Gray
+                    )
+                }
+            },
+            headlineContent = { Text("Icon", color = Color.Gray) },
+            trailingContent = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (selectedImageUri != null) "Custom" else if (selectedIcon != null) "Selected" else "Default", color = Color.Black)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.LightGray)
+                }
+            }
+        )
         CreditDivider()
 
-        ClickableCreditItem(Icons.Default.CreditCard, "Credit limit", creditLimit)
+        ListItem(
+            leadingContent = { Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color.Gray) },
+            headlineContent = {
+                TextField(
+                    value = creditLimit,
+                    onValueChange = onLimitChange,
+                    label = { Text("Credit limit", color = Color.Gray) },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        )
         CreditDivider()
 
-        ClickableCreditItem(Icons.Default.AddCircleOutline, "Opening balance", openingBalance)
+        ListItem(
+            leadingContent = { Icon(Icons.Default.AddCircleOutline, contentDescription = null, tint = Color.Gray) },
+            headlineContent = {
+                TextField(
+                    value = openingBalance,
+                    onValueChange = onBalanceChange,
+                    label = { Text("Opening balance", color = Color.Gray) },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        )
         CreditDivider()
 
         ListItem(
@@ -249,7 +394,9 @@ fun CreditAdvancedFields(
     includeInGroupBalance: Boolean,
     onGroupBalanceChange: (Boolean) -> Unit,
     statementCloseDay: String,
-    weekendStrategy: String
+    onDayChange: (String) -> Unit,
+    selectedGroupName: String,
+    onGroupClick: () -> Unit
 ) {
     Column {
         ListItem(
@@ -301,23 +448,55 @@ fun CreditAdvancedFields(
         )
         CreditDivider()
 
-        ClickableCreditItem(Icons.Default.Layers, "Put in Group", "Select")
+        ClickableCreditItem(
+            leadingIcon = Icons.Default.Layers,
+            label = "Put in Group",
+            value = selectedGroupName,
+            onClick = onGroupClick
+        )
         CreditDivider()
 
-        ClickableCreditItem(Icons.Default.PieChart, "Monitored by Budgets", "Shopee")
+        ClickableCreditItem(
+            leadingIcon = Icons.Default.PieChart,
+            label = "Monitored by Budgets",
+            value = "Shopee"
+        )
         CreditDivider()
 
-        ClickableCreditItem(Icons.Default.SyncAlt, "Statement close day", statementCloseDay)
+        ListItem(
+            leadingContent = { Icon(Icons.Default.SyncAlt, contentDescription = null, tint = Color.Gray) },
+            headlineContent = {
+                TextField(
+                    value = statementCloseDay,
+                    onValueChange = onDayChange,
+                    label = { Text("Statement close day", color = Color.Gray) },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        )
         CreditDivider()
 
-        ClickableCreditItem(Icons.Default.ViewCarousel, "When it falls on a weekend", weekendStrategy)
+        ClickableCreditItem(
+            leadingIcon = Icons.Default.ViewCarousel,
+            label = "When it falls on a weekend",
+            value = "No change"
+        )
     }
 }
 
 @Composable
-fun ClickableCreditItem(leadingIcon: androidx.compose.ui.graphics.vector.ImageVector, label: String, value: String) {
+fun ClickableCreditItem(
+    leadingIcon: ImageVector,
+    label: String,
+    value: String,
+    onClick: () -> Unit = {}
+) {
     ListItem(
-        modifier = Modifier.clickable { },
+        modifier = Modifier.clickable { onClick() },
         leadingContent = { Icon(leadingIcon, contentDescription = null, tint = Color.Gray) },
         headlineContent = { Text(label, color = Color.Gray) },
         trailingContent = {

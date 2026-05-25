@@ -49,7 +49,9 @@ fun MainApp() {
                         )
                     },
                     label = { Text(screen.label) },
-                    selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                    selected = currentDestination?.hierarchy?.any { 
+                        it.route?.contains(screen.route, ignoreCase = true) == true 
+                    } == true,
                     onClick = {
                         navController.navigate(screen.route) {
                             popUpTo(navController.graph.findStartDestination().id) {

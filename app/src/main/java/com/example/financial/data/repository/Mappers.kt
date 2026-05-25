@@ -5,8 +5,10 @@ import androidx.compose.material.icons.filled.Money
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.example.financial.data.local.entity.AccountEntity
+import com.example.financial.data.local.entity.AccountGroupEntity
 import com.example.financial.data.local.entity.TransactionEntity
 import com.example.financial.domain.model.Account
+import com.example.financial.domain.model.AccountGroup
 import com.example.financial.domain.model.Transaction
 
 fun TransactionEntity.toDomain(): Transaction {
@@ -42,7 +44,20 @@ fun AccountEntity.toDomain(): Account {
         name = name,
         balance = balance,
         type = type,
-        color = Color(color)
+        color = Color(color),
+        groupId = groupId,
+        iconUri = iconUri,
+        creditLimit = creditLimit,
+        statementCloseDay = statementCloseDay,
+        autoClear = autoClear,
+        additionalInfo = additionalInfo,
+        principalAmount = principalAmount,
+        apr = apr,
+        duration = duration,
+        startDate = startDate,
+        firstDueDate = firstDueDate,
+        asOfDate = asOfDate,
+        currency = currency
     )
 }
 
@@ -52,6 +67,39 @@ fun Account.toEntity(): AccountEntity {
         name = name,
         balance = balance,
         type = type,
+        color = color.toArgb(),
+        groupId = groupId,
+        iconUri = iconUri,
+        creditLimit = creditLimit,
+        statementCloseDay = statementCloseDay,
+        autoClear = autoClear,
+        additionalInfo = additionalInfo,
+        principalAmount = principalAmount,
+        apr = apr,
+        duration = duration,
+        startDate = startDate,
+        firstDueDate = firstDueDate,
+        asOfDate = asOfDate,
+        currency = currency
+    )
+}
+
+fun AccountGroupEntity.toDomain(): AccountGroup {
+    return AccountGroup(
+        id = id,
+        name = name,
+        iconName = iconName,
+        iconUri = iconUri,
+        color = Color(color)
+    )
+}
+
+fun AccountGroup.toEntity(): AccountGroupEntity {
+    return AccountGroupEntity(
+        id = id,
+        name = name,
+        iconName = iconName,
+        iconUri = iconUri,
         color = color.toArgb()
     )
 }

@@ -18,12 +18,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.financial.presentation.component.AccountItem
+import com.example.financial.presentation.component.AccountGroupItem
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 
 @Composable
 fun AccountsScreen(
     viewModel: FinancialViewModel,
-    onAddAccountClick: () -> Unit
+    onAddAccountClick: () -> Unit,
+    onAddGroupClick: () -> Unit,
+    onAccountClick: (String) -> Unit
 ) {
     val uiState by viewModel.homeUiState.collectAsState()
     var searchQuery by remember { mutableStateOf("") }
@@ -77,7 +80,7 @@ fun AccountsScreen(
                             text = { Text("Add Group Account") },
                             onClick = {
                                 showAddMenu = false
-                                // TODO: Add group account later
+                                onAddGroupClick()
                             }
                         )
                     }
@@ -203,7 +206,7 @@ fun AccountsScreen(
             }
         }
 
-        if (filteredAccounts.isEmpty()) {
+        if (filteredAccounts.isEmpty() && uiState.accountGroups.isEmpty()) {
             item {
                 Text(
                     text = if (searchQuery.isBlank())
@@ -219,8 +222,38 @@ fun AccountsScreen(
                 )
             }
         } else {
-            items(filteredAccounts) { account ->
-                AccountItem(account)
+            // Logic: Duyệt qua các group, hiển thị group và các account thuộc group đó
+            uiState.accountGroups.forEach { group ->
+                item(key = group.id) {
+                    AccountGroupItem(
+                        group = group,
+                        onDeleteClick = { viewModel.deleteAccountGroup(it) }
+                    )
+                }
+                
+                val accountsInGroup = filteredAccounts.filter { it.groupId == group.id }
+                items(accountsInGroup, key = { it.id }) { account ->
+                    Box(modifier = Modifier.padding(start = 16.dp)) {
+                        AccountItem(account, onClick = { onAccountClick(it.id) })
+                    }
+                }
+            }
+            
+            // Hiển thị các Account không thuộc group nào (Ungrouped)
+            val unGroupedAccounts = filteredAccounts.filter { it.groupId == null }
+            if (unGroupedAccounts.isNotEmpty()) {
+                if (uiState.accountGroups.isNotEmpty()) {
+                    item {
+                        Text(
+                            "Ungrouped",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+                items(unGroupedAccounts, key = { it.id }) { account ->
+                    AccountItem(account, onClick = { onAccountClick(it.id) })
+                }
             }
         }
 

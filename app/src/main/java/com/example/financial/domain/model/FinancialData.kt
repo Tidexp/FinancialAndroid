@@ -19,6 +19,30 @@ data class Account(
     val name: String,
     val balance: String,
     val type: AccountType,
+    val color: Color,
+    val groupId: String? = null,
+    val iconUri: String? = null,
+    val creditLimit: String? = null,
+    val statementCloseDay: String? = null,
+    val autoClear: Boolean = false,
+    val additionalInfo: String? = null,
+    // Loan specific
+    val principalAmount: String? = null,
+    val apr: String? = null,
+    val duration: String? = null,
+    val startDate: String? = null,
+    val firstDueDate: String? = null,
+    // Investment specific
+    val asOfDate: String? = null,
+    // Forex specific
+    val currency: String? = null
+)
+
+data class AccountGroup(
+    val id: String,
+    val name: String,
+    val iconName: String? = null,
+    val iconUri: String? = null,
     val color: Color
 )
 
