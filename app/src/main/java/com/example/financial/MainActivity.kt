@@ -50,15 +50,35 @@ fun MainApp() {
                     },
                     label = { Text(screen.label) },
                     selected = currentDestination?.hierarchy?.any { 
-                        it.route?.contains(screen.route, ignoreCase = true) == true 
+                        val route = it.route ?: ""
+                        // Kiểm tra xem route hiện tại có thuộc về tab này không
+                        // Ví dụ: "create_account" thuộc về tab "accounts"
+                        route == screen.route || 
+                        (screen == Screen.Accounts && route.contains("account", ignoreCase = true)) ||
+                        (screen == Screen.Budgets && route.contains("budget", ignoreCase = true))
                     } == true,
                     onClick = {
-                        navController.navigate(screen.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                        val isSelected = currentDestination?.hierarchy?.any { 
+                            val route = it.route ?: ""
+                            route == screen.route || 
+                            (screen == Screen.Accounts && route.contains("account", ignoreCase = true)) ||
+                            (screen == Screen.Budgets && route.contains("budget", ignoreCase = true))
+                        } == true
+
+                        if (isSelected) {
+                            // Nếu đang ở đúng tab đó (hoặc màn hình con của nó), quay về gốc của tab
+                            if (currentDestination?.route != screen.route) {
+                                navController.popBackStack(screen.route, inclusive = false)
                             }
-                            launchSingleTop = true
-                            restoreState = true
+                        } else {
+                            // Chuyển tab như bình thường
+                            navController.navigate(screen.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
                     }
                 )

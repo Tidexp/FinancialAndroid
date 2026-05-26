@@ -42,7 +42,8 @@ class FinancialViewModel(
     companion object {
         val Factory: ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                val application = (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as FinancialApplication)
+                val application =
+                    (this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as FinancialApplication)
                 val database = application.database
                 val firestore = FirebaseFirestore.getInstance()
                 val auth = FirebaseAuth.getInstance()
@@ -74,18 +75,27 @@ class FinancialViewModel(
         viewModelScope.launch {
             // Check Firebase Auth
             if (authRepository.currentUser != null) {
-                _homeUiState.update { it.copy(authStatus = "Connected (${authRepository.currentUser?.uid?.take(6)})") }
+                _homeUiState.update {
+                    it.copy(
+                        authStatus = "Connected (${
+                            authRepository.currentUser?.uid?.take(
+                                6
+                            )
+                        })"
+                    )
+                }
             } else {
                 val result = authRepository.signInAnonymously()
                 result.onSuccess { user ->
-                    val status = if (user != null) "Connected (${user.uid.take(6)})" else "Auth Empty"
+                    val status =
+                        if (user != null) "Connected (${user.uid.take(6)})" else "Auth Empty"
                     _homeUiState.update { it.copy(authStatus = status) }
                 }.onFailure { error ->
                     _homeUiState.update { it.copy(authStatus = "Error: ${error.message?.take(20)}...") }
                     android.util.Log.e("FinancialViewModel", "Auth failed", error)
                 }
             }
-            
+
             // Check local DB (Room) via a simple query
             repository.getAccounts().take(1).collect {
                 _homeUiState.update { it.copy(dbStatus = "Local DB Ready") }
@@ -93,7 +103,12 @@ class FinancialViewModel(
         }
     }
 
-    fun addAccountGroup(name: String, iconName: String?, iconUri: String?, color: androidx.compose.ui.graphics.Color) {
+    fun addAccountGroup(
+        name: String,
+        iconName: String?,
+        iconUri: String?,
+        color: androidx.compose.ui.graphics.Color
+    ) {
         viewModelScope.launch {
             val group = AccountGroup(
                 id = java.util.UUID.randomUUID().toString(),
@@ -263,19 +278,32 @@ class FinancialViewModel(
                 repository.getTransactions(),
                 repository.getBudgets()
             ) { balance, accounts, groups, transactions, budgets ->
-                HomeUiState(
-                    balanceData = balance,
-                    accounts = accounts,
-                    accountGroups = groups,
-                    transactions = transactions,
-                    budgets = budgets,
-                    isLoading = false
-                )
+                // Create a partial state update
+                stateUpdate(balance, accounts, groups, transactions, budgets)
             }.flowOn(Dispatchers.IO)
-             .collect { state ->
-                _homeUiState.value = state
-            }
+                .collect { update ->
+                    _homeUiState.update { currentState ->
+                        update(currentState)
+                    }
+                }
         }
+    }
+
+    private fun stateUpdate(
+        balance: BalanceData,
+        accounts: List<Account>,
+        groups: List<AccountGroup>,
+        transactions: List<Transaction>,
+        budgets: List<Budget>
+    ): (HomeUiState) -> HomeUiState = { currentState ->
+        currentState.copy(
+            balanceData = balance,
+            accounts = accounts,
+            accountGroups = groups,
+            transactions = transactions,
+            budgets = budgets,
+            isLoading = false
+        )
     }
 
     private fun loadStatsData() {
