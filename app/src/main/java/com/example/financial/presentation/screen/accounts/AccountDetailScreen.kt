@@ -1,4 +1,4 @@
-package com.example.financial.presentation.screen.accounts.setup
+package com.example.financial.presentation.screen.accounts
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState

@@ -1,13 +1,8 @@
 package com.example.financial.presentation.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.material3.Text
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -24,6 +19,7 @@ import com.example.financial.presentation.screen.scheduled.ScheduledScreen
 import com.example.financial.presentation.screen.settings.SettingsScreen
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 import com.example.financial.domain.model.AccountType
+import com.example.financial.presentation.screen.accounts.AccountDetailScreen
 
 @Composable
 fun NavGraph(navController: NavHostController) {
@@ -115,12 +111,14 @@ fun NavGraph(navController: NavHostController) {
         }
 
         composable(Screen.CreateAccountGroup.route) {
+            val uiState by viewModel.homeUiState.collectAsState()
             CreateAccountGroupScreen(
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { name, iconName, iconUri, color ->
-                    viewModel.addAccountGroup(name, iconName, iconUri, color)
+                onSaveClick = { name, iconName, iconUri, color, accountIds ->
+                    viewModel.addAccountGroup(name, iconName, iconUri, color, accountIds)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
-                }
+                },
+                accounts = uiState.accounts
             )
         }
 

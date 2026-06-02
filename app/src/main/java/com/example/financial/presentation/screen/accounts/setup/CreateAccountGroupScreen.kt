@@ -1,6 +1,7 @@
 package com.example.financial.presentation.screen.accounts.setup
 
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,17 +28,23 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.financial.presentation.component.IconPickerBottomSheet
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.example.financial.domain.model.Account
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateAccountGroupScreen(
     onBackClick: () -> Unit,
-    onSaveClick: (name: String, iconName: String?, iconUri: String?, color: Color) -> Unit
+    onSaveClick: (name: String, iconName: String?, iconUri: String?, color: Color, accountIds: List<String>) -> Unit,
+    accounts: List<Account> = emptyList()
 ) {
     var groupName by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<ImageVector?>(Icons.Default.Folder) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var selectedColor by remember { mutableStateOf(Color(0xFF2196F3)) }
     var showIconPicker by remember { mutableStateOf(false) }
+    val selectedAccountIds = remember { mutableStateListOf<String>() }
 
     val colors = listOf(
         Color(0xFFF44336), Color(0xFFE91E63), Color(0xFF9C27B0), Color(0xFF673AB7),
@@ -59,7 +66,13 @@ fun CreateAccountGroupScreen(
                 actions = {
                     TextButton(onClick = {
                         if (groupName.isNotBlank()) {
-                            onSaveClick(groupName, "folder", selectedImageUri?.toString(), selectedColor)
+                            onSaveClick(
+                                groupName,
+                                "folder",
+                                selectedImageUri?.toString(),
+                                selectedColor,
+                                selectedAccountIds.toList()
+                            )
                         }
                     }) {
                         Text("Save", fontWeight = FontWeight.Bold)
@@ -72,7 +85,8 @@ fun CreateAccountGroupScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             // Group Header Preview
@@ -183,6 +197,67 @@ fun CreateAccountGroupScreen(
                                     shape = CircleShape
                                 )
                         )
+                    }
+                }
+            }
+
+            // Account Selector
+            if (accounts.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AccountBalance, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Add Accounts to Group", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                    ) {
+                        Column {
+                            accounts.forEach { account ->
+                                val isSelected = selectedAccountIds.contains(account.id)
+                                ListItem(
+                                    modifier = Modifier.clickable {
+                                        if (isSelected) {
+                                            selectedAccountIds.remove(account.id)
+                                        } else {
+                                            selectedAccountIds.add(account.id)
+                                        }
+                                    },
+                                    headlineContent = { Text(account.name) },
+                                    supportingContent = { Text(account.type.displayName) },
+                                    trailingContent = {
+                                        Checkbox(
+                                            checked = isSelected,
+                                            onCheckedChange = { checked ->
+                                                if (checked) {
+                                                    selectedAccountIds.add(account.id)
+                                                } else {
+                                                    selectedAccountIds.remove(account.id)
+                                                }
+                                            }
+                                        )
+                                    },
+                                    leadingContent = {
+                                        Icon(
+                                            account.type.icon,
+                                            contentDescription = null,
+                                            tint = account.color,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                )
+                                if (account != accounts.last()) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 16.dp),
+                                        thickness = 0.5.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
