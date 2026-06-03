@@ -17,6 +17,7 @@ import com.example.financial.presentation.screen.budgets.setup.CreateIncomeBudge
 import com.example.financial.presentation.screen.reports.ReportsScreen
 import com.example.financial.presentation.screen.scheduled.ScheduledScreen
 import com.example.financial.presentation.screen.settings.SettingsScreen
+import com.example.financial.presentation.screen.transactions.AddTransactionScreen
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 import com.example.financial.domain.model.AccountType
 import com.example.financial.presentation.screen.accounts.AccountDetailScreen
@@ -176,9 +177,26 @@ fun NavGraph(navController: NavHostController) {
                     onDeleteClick = {
                         viewModel.deleteAccount(it)
                         navController.popBackStack()
+                    },
+                    onNavigateToTransaction = { type ->
+                        navController.navigate("add_transaction/${account.id}")
                     }
                 )
             }
+        }
+
+        composable(
+            route = Screen.AddTransaction.route,
+            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getString("accountId")
+            val uiState by viewModel.homeUiState.collectAsState()
+            val account = uiState.accounts.find { it.id == accountId }
+
+            AddTransactionScreen(
+                account = account,
+                onBackClick = { navController.popBackStack() }
+            )
         }
 
         // Các route khác giữ nguyên

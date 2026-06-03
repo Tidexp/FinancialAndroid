@@ -17,13 +17,14 @@ import androidx.compose.ui.unit.dp
 import com.example.financial.presentation.component.*
 
 @Composable
-fun ExpenseScreen() {
+fun ExpenseScreen(showHeader: Boolean = true) {
     var isCleared by remember { mutableStateOf(true) }
 
     TransactionBaseScreen(
         title = "Expense",
         onCloseClick = { },
         onSaveClick = { },
+        showHeader = showHeader,
         typeSelector = {
             Row(
                 modifier = Modifier

@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -19,14 +18,20 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun TransactionTypeIcon(icon: ImageVector, isSelected: Boolean, selectedColor: Color = Color.Red) {
+fun TransactionTypeIcon(
+    icon: ImageVector,
+    isSelected: Boolean,
+    selectedColor: Color = Color.Red,
+    onClick: (() -> Unit)? = null
+) {
     Box(
         modifier = Modifier
             .size(36.dp)
             .background(
                 color = if (isSelected) Color.White else Color.Transparent,
                 shape = RoundedCornerShape(50)
-            ),
+            )
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -139,6 +144,7 @@ fun TransactionBaseScreen(
     onCloseClick: () -> Unit,
     onSaveClick: () -> Unit,
     typeSelector: @Composable () -> Unit,
+    showHeader: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(
@@ -147,46 +153,48 @@ fun TransactionBaseScreen(
             .background(Color(0xFFF2F2F7))
             .padding(16.dp)
     ) {
-        // Top Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onCloseClick,
+        if (showHeader) {
+            // Top Bar
+            Row(
                 modifier = Modifier
-                    .background(Color.White, RoundedCornerShape(50))
-                    .size(40.dp)
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Close, contentDescription = null, tint = Color.Black)
+                IconButton(
+                    onClick = onCloseClick,
+                    modifier = Modifier
+                        .background(Color.White, RoundedCornerShape(50))
+                        .size(40.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = null, tint = Color.Black)
+                }
+
+                typeSelector()
+
+                Button(
+                    onClick = onSaveClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
+                    shape = RoundedCornerShape(20.dp),
+                    contentPadding = PaddingValues(horizontal = 24.dp)
+                ) {
+                    Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
+                }
             }
 
-            typeSelector()
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Button(
-                onClick = onSaveClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
-                shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 24.dp)
-            ) {
-                Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
-            }
+            Text(
+                text = title,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                color = Color.Black
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Text(
-            text = title,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-            color = Color.Black
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
 
         Card(
             modifier = Modifier.fillMaxWidth(),

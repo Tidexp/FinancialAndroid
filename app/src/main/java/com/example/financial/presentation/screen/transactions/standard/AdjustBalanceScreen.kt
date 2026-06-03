@@ -15,11 +15,12 @@ import androidx.compose.ui.unit.dp
 import com.example.financial.presentation.component.*
 
 @Composable
-fun AdjustBalanceScreen() {
+fun AdjustBalanceScreen(showHeader: Boolean = true) {
     TransactionBaseScreen(
         title = "Adjust Balance",
         onCloseClick = { },
         onSaveClick = { },
+        showHeader = showHeader,
         typeSelector = {
             Row(
                 modifier = Modifier

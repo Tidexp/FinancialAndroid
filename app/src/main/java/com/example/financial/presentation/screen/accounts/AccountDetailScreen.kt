@@ -25,9 +25,21 @@ fun AccountDetailScreen(
     account: Account,
     groupName: String?,
     onBackClick: () -> Unit,
-    onDeleteClick: (Account) -> Unit
+    onDeleteClick: (Account) -> Unit,
+    onNavigateToTransaction: (type: String) -> Unit
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+
+    val transactionTabs = remember(account.type) {
+        val tabs = mutableListOf("Expense", "Income", "Transfer", "Adjust Balance")
+        if (account.type == AccountType.FOREX) {
+            tabs.add("Exchange")
+        } else if (account.type == AccountType.INVESTMENT) {
+            tabs.add("Buy")
+            tabs.add("Sell")
+        }
+        tabs
+    }
 
     Scaffold(
         topBar = {
@@ -39,6 +51,9 @@ fun AccountDetailScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { onNavigateToTransaction("Expense") }) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Transaction")
+                    }
                     IconButton(onClick = { showDeleteDialog = true }) {
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
                     }

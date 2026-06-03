@@ -15,13 +15,14 @@ import androidx.compose.ui.unit.dp
 import com.example.financial.presentation.component.*
 
 @Composable
-fun BuyScreen() {
+fun BuyScreen(showHeader: Boolean = true) {
     var isCleared by remember { mutableStateOf(true) }
 
     TransactionBaseScreen(
         title = "Buy",
         onCloseClick = { },
         onSaveClick = { },
+        showHeader = showHeader,
         typeSelector = {
             Row(
                 modifier = Modifier

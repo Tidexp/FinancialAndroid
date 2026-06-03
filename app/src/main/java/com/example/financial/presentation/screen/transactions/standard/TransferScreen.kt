@@ -17,13 +17,14 @@ import androidx.compose.ui.unit.dp
 import com.example.financial.presentation.component.*
 
 @Composable
-fun TransferScreen() {
+fun TransferScreen(showHeader: Boolean = true) {
     var isCleared by remember { mutableStateOf(true) }
 
     TransactionBaseScreen(
         title = "Transfer",
         onCloseClick = { },
         onSaveClick = { },
+        showHeader = showHeader,
         typeSelector = {
             Row(
                 modifier = Modifier
