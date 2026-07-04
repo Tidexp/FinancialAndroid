@@ -27,5 +27,7 @@ data class AccountEntity(
     val asOfDate: String? = null,
     // Forex specific
     val currency: String? = null,
-    val lastUpdated: Long = System.currentTimeMillis()
+    val lastUpdated: Long = System.currentTimeMillis(),
+    val orderIndex: Int = 0,
+    val monitoredByBudgetId: String? = null
 )

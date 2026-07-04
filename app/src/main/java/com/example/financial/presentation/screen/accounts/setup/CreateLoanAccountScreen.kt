@@ -17,11 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.financial.domain.model.AccountGroup
+import com.example.financial.domain.model.Budget
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
-
-// Màu xanh lá đậm đặc trưng cho Loan Account trong ảnh mẫu
-val LoanPrimaryColor = Color(0xFF4CAF50)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,14 +33,15 @@ fun CreateLoanAccountScreen(
         startDate: String,
         firstDueDate: String,
         groupId: String?,
-        additionalInfo: String
+        additionalInfo: String,
+        monitoredByBudgetId: String?
     ) -> Unit,
-    groups: List<AccountGroup> = emptyList()
+    groups: List<AccountGroup> = emptyList(),
+    budgets: List<Budget> = emptyList()
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
 
-    // --- State Hoisting cho Loan ---
     var accountName by remember { mutableStateOf("") }
     var principalAmount by remember { mutableStateOf("0,00 USD") }
     var apr by remember { mutableStateOf("") }
@@ -55,6 +54,8 @@ fun CreateLoanAccountScreen(
     var includeInGroupBalance by remember { mutableStateOf(true) }
     var selectedGroupId by remember { mutableStateOf<String?>(null) }
     var showGroupPicker by remember { mutableStateOf(false) }
+    var selectedBudgetId by remember { mutableStateOf<String?>(null) }
+    var showBudgetPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -84,12 +85,13 @@ fun CreateLoanAccountScreen(
                                     startDate,
                                     firstDueDate,
                                     selectedGroupId,
-                                    additionalInfo
+                                    additionalInfo,
+                                    selectedBudgetId
                                 )
                             }
                         },
                         shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black), // Nút Save màu đen theo mẫu
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
                         contentPadding = PaddingValues(horizontal = 20.dp),
                         modifier = Modifier.padding(end = 8.dp)
                     ) {
@@ -158,7 +160,9 @@ fun CreateLoanAccountScreen(
                             includeInGroupBalance = includeInGroupBalance,
                             onGroupBalanceChange = { includeInGroupBalance = it },
                             selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "Select",
-                            onGroupClick = { showGroupPicker = true }
+                            onGroupClick = { showGroupPicker = true },
+                            selectedBudgetName = budgets.find { it.id == selectedBudgetId }?.name ?: "None",
+                            onBudgetClick = { showBudgetPicker = true }
                         )
                     }
                 }
@@ -193,6 +197,34 @@ fun CreateLoanAccountScreen(
                 }
             }
         }
+
+        if (showBudgetPicker) {
+            ModalBottomSheet(onDismissRequest = { showBudgetPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Budget", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedBudgetId = null
+                            showBudgetPicker = false 
+                        },
+                        headlineContent = { Text("None") }
+                    )
+                    budgets.forEach { budget ->
+                        ListItem(
+                            modifier = Modifier.clickable { 
+                                selectedBudgetId = budget.id
+                                showBudgetPicker = false 
+                            },
+                            headlineContent = { Text(budget.name) },
+                            leadingContent = { 
+                                Box(modifier = Modifier.size(24.dp).background(budget.color, CircleShape))
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -209,7 +241,6 @@ fun LoanBasicFields(
     firstDueDate: String
 ) {
     Column {
-        // Tên tài khoản
         ListItem(
             leadingContent = { Icon(Icons.Default.Edit, null, tint = Color.Gray) },
             headlineContent = {
@@ -229,11 +260,9 @@ fun LoanBasicFields(
         )
         LoanDivider()
 
-        // Icon
         ClickableLoanItem(Icons.AutoMirrored.Filled.ShowChart, "Icon", "Default")
         LoanDivider()
 
-        // Số tiền gốc (Principal)
         ListItem(
             leadingContent = { Icon(Icons.Default.AddCircleOutline, null, tint = Color.Gray) },
             headlineContent = {
@@ -251,7 +280,6 @@ fun LoanBasicFields(
         )
         LoanDivider()
 
-        // Lãi suất APR
         ListItem(
             leadingContent = { Icon(Icons.Default.AccountBalance, null, tint = Color.Gray) },
             headlineContent = {
@@ -271,19 +299,15 @@ fun LoanBasicFields(
         )
         LoanDivider()
 
-        // Thời hạn (Duration)
         ClickableLoanItem(Icons.Default.Schedule, "Duration", duration)
         LoanDivider()
 
-        // Ngày bắt đầu
         ClickableLoanItem(Icons.Default.CalendarToday, "Start date", startDate, isDate = true)
         LoanDivider()
 
-        // Ngày đến hạn đầu tiên
         ClickableLoanItem(Icons.Outlined.EventNote, "First due date", firstDueDate, isDate = true)
         LoanDivider()
 
-        // Kế hoạch trả nợ
         ListItem(
             modifier = Modifier.clickable { },
             leadingContent = { Icon(Icons.Default.Description, null, tint = Color.Gray) },
@@ -302,7 +326,9 @@ fun LoanAdvancedFields(
     includeInGroupBalance: Boolean,
     onGroupBalanceChange: (Boolean) -> Unit,
     selectedGroupName: String,
-    onGroupClick: () -> Unit
+    onGroupClick: () -> Unit,
+    selectedBudgetName: String,
+    onBudgetClick: () -> Unit
 ) {
     Column {
         ListItem(
@@ -347,7 +373,12 @@ fun LoanAdvancedFields(
         )
         LoanDivider()
 
-        ClickableLoanItem(Icons.Default.WorkOutline, "Monitored by Budgets", "None")
+        ClickableLoanItem(
+            icon = Icons.Default.WorkOutline, 
+            label = "Monitored by Budgets", 
+            value = selectedBudgetName,
+            onClick = onBudgetClick
+        )
     }
 }
 

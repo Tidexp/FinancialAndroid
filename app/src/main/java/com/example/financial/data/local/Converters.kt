@@ -3,8 +3,15 @@ package com.example.financial.data.local
 import androidx.room.TypeConverter
 import com.example.financial.domain.model.AccountType
 import com.example.financial.domain.model.TransactionStatus
+import com.example.financial.domain.model.TransactionType
 
 class Converters {
+    @TypeConverter
+    fun fromTransactionType(type: TransactionType): String = type.name
+
+    @TypeConverter
+    fun toTransactionType(value: String): TransactionType = TransactionType.valueOf(value)
+
     @TypeConverter
     fun fromTransactionStatus(status: TransactionStatus): String = status.name
 

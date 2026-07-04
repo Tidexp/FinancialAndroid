@@ -1,5 +1,6 @@
 package com.example.financial.presentation.screen.budgets.setup
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -18,21 +19,38 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.financial.domain.model.BudgetGroup
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateExpenseBudgetsScreen(
     onCloseClick: () -> Unit,
-    onSaveClick: () -> Unit
+    onSaveClick: (
+        name: String,
+        amount: Double,
+        isIncome: Boolean,
+        color: Color,
+        groupId: String?,
+        startDate: Long,
+        repeatEnabled: Boolean,
+        frequencyValue: Int,
+        frequencyUnit: String,
+        rolloverEnabled: Boolean
+    ) -> Unit,
+    budgetGroups: List<BudgetGroup> = emptyList()
 ) {
     // --- States ---
     var budgetName by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("0,00 USD") }
+    var amountText by remember { mutableStateOf("0.00") }
+    var selectedColor by remember { mutableStateOf(Color(0xFFF44336)) }
+    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var showGroupPicker by remember { mutableStateOf(false) }
+    var startDate by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
     var repeatEnabled by remember { mutableStateOf(true) }
     var frequencyValue by remember { mutableStateOf("1") }
     var frequencyUnit by remember { mutableStateOf("month") }
 
-    // State cho tính năng Rollover mới thêm
     var rolloverEnabled by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -52,7 +70,22 @@ fun CreateExpenseBudgetsScreen(
                 },
                 actions = {
                     Button(
-                        onClick = onSaveClick,
+                        onClick = {
+                            if (budgetName.isNotBlank()) {
+                                onSaveClick(
+                                    budgetName,
+                                    amountText.toDoubleOrNull() ?: 0.0,
+                                    false,
+                                    selectedColor,
+                                    selectedGroupId,
+                                    startDate,
+                                    repeatEnabled,
+                                    frequencyValue.toIntOrNull() ?: 1,
+                                    frequencyUnit,
+                                    rolloverEnabled
+                                )
+                            }
+                        },
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
                         contentPadding = PaddingValues(horizontal = 24.dp)
@@ -71,29 +104,59 @@ fun CreateExpenseBudgetsScreen(
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // SECTION 1: Describe your budget
             BudgetSectionHeader("Describe your budget")
             BudgetCard {
                 BudgetInputRow(Icons.Default.Badge, "Name", budgetName) { budgetName = it }
                 BudgetDivider()
-                BudgetClickableRow(Icons.Default.MoveToInbox, "0,00", "USD")
+                
+                ListItem(
+                    leadingContent = { Icon(Icons.Default.MoveToInbox, null, tint = Color.Gray) },
+                    headlineContent = {
+                        TextField(
+                            value = amountText,
+                            onValueChange = { amountText = it },
+                            placeholder = { Text("0.00") },
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                    },
+                    trailingContent = { Text("USD", color = Color.Gray) }
+                )
+                
                 BudgetDivider()
-                BudgetClickableRow(Icons.Default.Layers, "Put in Group", "")
+                
+                ListItem(
+                    modifier = Modifier.clickable { showGroupPicker = true },
+                    leadingContent = { Icon(Icons.Default.Layers, null, tint = Color.Gray) },
+                    headlineContent = { Text("Put in Group") },
+                    trailingContent = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = budgetGroups.find { it.id == selectedGroupId }?.name ?: "None",
+                                color = Color.Gray
+                            )
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
+                        }
+                    }
+                )
+                
                 BudgetDivider()
                 BudgetClickableRow(Icons.Default.Edit, "Icon", "")
             }
 
-            // SECTION 2: Which transactions should be included?
             BudgetSectionHeader("Which transactions should be included?")
             BudgetCard {
-                BudgetClickableRow(Icons.Default.AccountBalanceWallet, "None", "")
+                BudgetClickableRow(Icons.Default.AccountBalanceWallet, "All Accounts", "")
                 BudgetDivider()
-                BudgetClickableRow(Icons.Outlined.Folder, "Select Categories", "")
+                BudgetClickableRow(Icons.Outlined.Folder, "All Categories", "")
                 BudgetDivider()
-                BudgetClickableRow(Icons.Outlined.Label, "Tags", "")
+                BudgetClickableRow(Icons.Outlined.Label, "All Tags", "")
             }
 
-            // SECTION 3: Configure how the budget repeats
             BudgetSectionHeader("Configure how the budget repeats")
             BudgetCard {
                 ListItem(
@@ -104,7 +167,7 @@ fun CreateExpenseBudgetsScreen(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                "1 May 2026",
+                                "Today",
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
@@ -147,7 +210,6 @@ fun CreateExpenseBudgetsScreen(
                 }
             }
 
-            // --- SECTION NEW: Rollover Configuration ---
             BudgetSectionHeader("Rollover settings")
             BudgetCard {
                 ListItem(
@@ -183,12 +245,33 @@ fun CreateExpenseBudgetsScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+
+        if (showGroupPicker) {
+            ModalBottomSheet(onDismissRequest = { showGroupPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Budget Group", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedGroupId = null
+                            showGroupPicker = false 
+                        },
+                        headlineContent = { Text("None") }
+                    )
+                    budgetGroups.forEach { group ->
+                        ListItem(
+                            modifier = Modifier.clickable { 
+                                selectedGroupId = group.id
+                                showGroupPicker = false 
+                            },
+                            headlineContent = { Text(group.name) }
+                        )
+                    }
+                }
+            }
+        }
     }
 }
-
-// =============================================
-// --- COMPOSABLE HỖ TRỢ (HELPERS) ---
-// =============================================
 
 @Composable
 fun BudgetSectionHeader(title: String) {

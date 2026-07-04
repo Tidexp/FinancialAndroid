@@ -22,8 +22,9 @@ import coil.compose.AsyncImage
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import com.example.financial.domain.model.AccountGroup
 import androidx.compose.foundation.background
+import com.example.financial.domain.model.AccountGroup
+import com.example.financial.domain.model.Budget
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,9 +37,11 @@ fun CreateStandardAccountScreen(
         type: AccountType,
         groupId: String?,
         autoClear: Boolean,
-        additionalInfo: String
+        additionalInfo: String,
+        monitoredByBudgetId: String?
     ) -> Unit,
-    groups: List<AccountGroup> = emptyList()
+    groups: List<AccountGroup> = emptyList(),
+    budgets: List<Budget> = emptyList()
 ) {
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
@@ -57,6 +60,8 @@ fun CreateStandardAccountScreen(
     var additionalInfo by remember { mutableStateOf("") }
     var selectedGroupId by remember { mutableStateOf<String?>(null) }
     var showGroupPicker by remember { mutableStateOf(false) }
+    var selectedBudgetId by remember { mutableStateOf<String?>(null) }
+    var showBudgetPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -77,7 +82,7 @@ fun CreateStandardAccountScreen(
                     Button(
                         onClick = {
                             if (accountName.isNotBlank()) {
-                                onSaveClick(accountName, openingBalance, accountType, selectedGroupId, autoClear, additionalInfo)
+                                onSaveClick(accountName, openingBalance, accountType, selectedGroupId, autoClear, additionalInfo, selectedBudgetId)
                             }
                         },
                         shape = RoundedCornerShape(50),
@@ -143,7 +148,9 @@ fun CreateStandardAccountScreen(
                     additionalInfo = additionalInfo,
                     onInfoChange = { additionalInfo = it },
                     selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "Select",
-                    onGroupClick = { showGroupPicker = true }
+                    onGroupClick = { showGroupPicker = true },
+                    selectedBudgetName = budgets.find { it.id == selectedBudgetId }?.name ?: "None",
+                    onBudgetClick = { showBudgetPicker = true }
                 )
             }
         }
@@ -183,6 +190,34 @@ fun CreateStandardAccountScreen(
                             headlineContent = { Text(group.name) },
                             leadingContent = { 
                                 Box(modifier = Modifier.size(24.dp).background(group.color, CircleShape))
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showBudgetPicker) {
+            ModalBottomSheet(onDismissRequest = { showBudgetPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Budget", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedBudgetId = null
+                            showBudgetPicker = false 
+                        },
+                        headlineContent = { Text("None") }
+                    )
+                    budgets.forEach { budget ->
+                        ListItem(
+                            modifier = Modifier.clickable { 
+                                selectedBudgetId = budget.id
+                                showBudgetPicker = false 
+                            },
+                            headlineContent = { Text(budget.name) },
+                            leadingContent = { 
+                                Box(modifier = Modifier.size(24.dp).background(budget.color, CircleShape))
                             }
                         )
                     }
@@ -299,7 +334,9 @@ fun AdvancedTabContent(
     additionalInfo: String,
     onInfoChange: (String) -> Unit,
     selectedGroupName: String,
-    onGroupClick: () -> Unit
+    onGroupClick: () -> Unit,
+    selectedBudgetName: String,
+    onBudgetClick: () -> Unit
 ) {
     Column(modifier = Modifier.padding(16.dp)) {
         Card(
@@ -358,7 +395,8 @@ fun AdvancedTabContent(
                 ClickableListItem(
                     leadingIcon = Icons.Default.PieChart,
                     label = "Monitored by Budgets",
-                    value = "Shopee"
+                    value = selectedBudgetName,
+                    onClick = onBudgetClick
                 )
             }
         }

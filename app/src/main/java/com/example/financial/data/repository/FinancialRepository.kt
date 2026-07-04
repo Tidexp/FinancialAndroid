@@ -6,14 +6,13 @@ import com.example.financial.data.local.dao.TransactionDao
 import com.example.financial.domain.model.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.*
 
 class FinancialRepository(
     private val transactionDao: TransactionDao,
     private val accountDao: AccountDao,
     private val accountGroupDao: AccountGroupDao,
+    private val budgetDao: com.example.financial.data.local.dao.BudgetDao,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth
 ) {
@@ -35,11 +34,39 @@ class FinancialRepository(
             entities.map { it.toDomain() }
         }
 
-    fun getBalanceData(): Flow<BalanceData> = flowOf(
-        BalanceData("$0.00", "$0.00", "$0.00", "$0.00", 0.0f)
-    )
+    fun getBudgets(): Flow<List<Budget>> = 
+        budgetDao.getAllBudgets().map { entities ->
+            entities.map { it.toDomain() }
+        }
 
-    fun getBudgets(): Flow<List<Budget>> = flowOf(emptyList())
+    fun getBudgetGroups(): Flow<List<BudgetGroup>> =
+        budgetDao.getAllBudgetGroups().map { entities ->
+            entities.map { it.toDomain() }
+        }
+
+    fun getBalanceData(): Flow<BalanceData> = flow {
+        combine(
+            getAccounts(),
+            getTransactions()
+        ) { accounts, transactions ->
+            // Simple calculation for net worth
+            var totalBalance = 0.0
+            var liabilities = 0.0
+            accounts.forEach { account ->
+                val b = try { account.balance.replace(Regex("[^0-9.-]"), "").toDouble() } catch(e:Exception) { 0.0 }
+                if (b < 0) liabilities += kotlin.math.abs(b)
+                totalBalance += b
+            }
+            
+            BalanceData(
+                netWorth = String.format(java.util.Locale.getDefault(), "$%.2f", totalBalance),
+                liabilities = String.format(java.util.Locale.getDefault(), "$%.2f", liabilities),
+                totalIncome = "$0.00", // Calculate from transactions
+                totalExpenses = "$0.00", // Calculate from transactions
+                monthlyBudget = 0.5f
+            )
+        }.collect { emit(it) }
+    }
 
     fun getCategorySpending(): Flow<List<CategorySpending>> = flowOf(emptyList())
 
@@ -137,5 +164,29 @@ class FinancialRepository(
         } catch (e: Exception) {
             android.util.Log.e("FinancialRepository", "Firestore group delete error: ${e.message}")
         }
+    }
+
+    suspend fun addBudget(budget: Budget) {
+        budgetDao.insertBudget(budget.toEntity())
+    }
+
+    suspend fun updateBudget(budget: Budget) {
+        budgetDao.updateBudget(budget.toEntity())
+    }
+
+    suspend fun deleteBudget(budget: Budget) {
+        budgetDao.deleteBudget(budget.toEntity())
+    }
+
+    suspend fun addBudgetGroup(group: BudgetGroup) {
+        budgetDao.insertBudgetGroup(group.toEntity())
+    }
+
+    suspend fun updateBudgetGroup(group: BudgetGroup) {
+        budgetDao.updateBudgetGroup(group.toEntity())
+    }
+
+    suspend fun deleteBudgetGroup(group: BudgetGroup) {
+        budgetDao.deleteBudgetGroup(group.toEntity())
     }
 }

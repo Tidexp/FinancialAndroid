@@ -4,8 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.outlined.*
@@ -14,19 +14,53 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.*
 import com.example.financial.presentation.component.*
+import java.util.UUID
 
 @Composable
-fun ExchangeScreen(showHeader: Boolean = true) {
+fun ExchangeScreen(
+    showHeader: Boolean = true,
+    account: Account? = null,
+    onSave: (Transaction) -> Unit = {},
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
+) {
+    var fromAmount by remember { mutableStateOf("") }
+    var toAmount by remember { mutableStateOf("") }
+    var exchangeRate by remember { mutableStateOf("1.0") }
+    var commission by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var memo by remember { mutableStateOf("") }
     var isCleared by remember { mutableStateOf(true) }
+
+    val saveAction = {
+        val amountValue = fromAmount.toDoubleOrNull() ?: 0.0
+        if (amountValue > 0 && account != null) {
+            onSave(
+                Transaction(
+                    id = UUID.randomUUID().toString(),
+                    type = TransactionType.EXCHANGE,
+                    fromAccountId = account.id,
+                    amount = amountValue,
+                    exchangeRate = exchangeRate.toDoubleOrNull(),
+                    commission = commission.toDoubleOrNull(),
+                    description = description,
+                    memo = memo,
+                    status = if (isCleared) TransactionStatus.CLEARED else TransactionStatus.PENDING
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(fromAmount, toAmount, exchangeRate, commission, description, memo, isCleared, account) {
+        onRegisterSaveAction(saveAction)
+    }
 
     TransactionBaseScreen(
         title = "Exchange",
         onCloseClick = { },
-        onSaveClick = { },
+        onSaveClick = saveAction,
         showHeader = showHeader,
         typeSelector = {
             Row(
@@ -43,7 +77,7 @@ fun ExchangeScreen(showHeader: Boolean = true) {
             }
         }
     ) {
-        TransactionRow(Icons.Outlined.AddCircle, "From", trailingText = "Select", contentColor = Color.LightGray)
+        TransactionInputRow(icon = Icons.Outlined.AddCircle, value = fromAmount, onValueChange = { fromAmount = it }, placeholder = "From", trailingText = account?.currency ?: "USD")
         TransactionDivider()
 
         Row(
@@ -52,7 +86,12 @@ fun ExchangeScreen(showHeader: Boolean = true) {
         ) {
             Icon(Icons.Default.SwapVert, null, tint = Color.Gray)
             Spacer(Modifier.width(12.dp))
-            Text("1,00000000", color = Color.Black, modifier = Modifier.weight(1f))
+            BasicTextField(
+                value = exchangeRate,
+                onValueChange = { exchangeRate = it },
+                modifier = Modifier.weight(1f),
+                textStyle = LocalTextStyle.current.copy(color = Color.Black)
+            )
             Text("Exchange rate", color = Color.LightGray, modifier = Modifier.padding(end = 12.dp))
             Icon(
                 Icons.Outlined.Cached,
@@ -63,13 +102,10 @@ fun ExchangeScreen(showHeader: Boolean = true) {
         }
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "0,00", middleText = "To", trailingText = "Select")
+        TransactionInputRow(icon = Icons.Outlined.AddCircle, value = toAmount, onValueChange = { toAmount = it }, placeholder = "0,00", trailingText = "Target")
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "0,00", middleText = "Commission", trailingText = "Select", contentColor = Color.LightGray)
-        TransactionDivider()
-
-        TransactionRow(Icons.Outlined.AddCircle, "0,00", middleText = "Total", trailingText = "Select", contentColor = Color.LightGray)
+        TransactionInputRow(icon = Icons.Outlined.AddCircle, value = commission, onValueChange = { commission = it }, placeholder = "0,00", middleText = "Commission")
         TransactionDivider()
 
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -92,21 +128,9 @@ fun ExchangeScreen(showHeader: Boolean = true) {
         }
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.FontDownload, "Description", hasArrow = true, contentColor = Color.LightGray)
+        TransactionInputRow(icon = Icons.Outlined.FontDownload, value = description, onValueChange = { description = it }, placeholder = "Description", hasArrow = true)
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.Description, "Memo", contentColor = Color.LightGray)
-        TransactionDivider()
-
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Icon(Icons.Outlined.Image, null, tint = Color.Gray)
-            Icon(Icons.Outlined.AddCircleOutline, null, tint = Color(0xFF3478F6))
-        }
+        TransactionInputRow(icon = Icons.Outlined.Description, value = memo, onValueChange = { memo = it }, placeholder = "Memo")
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewExchange() {
-    ExchangeScreen()
 }

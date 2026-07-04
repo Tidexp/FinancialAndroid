@@ -12,18 +12,59 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.*
 import com.example.financial.presentation.component.*
+import java.util.UUID
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.items
 
 @Composable
-fun CryptoTransferScreen(showHeader: Boolean = true) {
+fun CryptoTransferScreen(
+    showHeader: Boolean = true,
+    fromAccount: Account? = null,
+    allAccounts: List<Account> = emptyList(),
+    onSave: (Transaction) -> Unit = {},
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
+) {
+    var amount by remember { mutableStateOf("") }
+    var fee by remember { mutableStateOf("") }
+    var receivedAmount by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var memo by remember { mutableStateOf("") }
     var isCleared by remember { mutableStateOf(true) }
+    
+    var selectedToAccount by remember { mutableStateOf<Account?>(null) }
+    var showAccountPicker by remember { mutableStateOf(false) }
+
+    val saveAction = {
+        val amountValue = amount.toDoubleOrNull() ?: 0.0
+        if (amountValue > 0 && fromAccount != null && selectedToAccount != null) {
+            onSave(
+                Transaction(
+                    id = UUID.randomUUID().toString(),
+                    type = TransactionType.TRANSFER,
+                    fromAccountId = fromAccount.id,
+                    toAccountId = selectedToAccount!!.id,
+                    amount = amountValue,
+                    commission = fee.toDoubleOrNull(),
+                    description = description,
+                    memo = memo,
+                    status = if (isCleared) TransactionStatus.CLEARED else TransactionStatus.PENDING
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(amount, fee, receivedAmount, description, memo, isCleared, fromAccount, selectedToAccount) {
+        onRegisterSaveAction(saveAction)
+    }
 
     TransactionBaseScreen(
         title = "Transfer",
         onCloseClick = { },
-        onSaveClick = { },
+        onSaveClick = saveAction,
         showHeader = showHeader,
         typeSelector = {
             Row(
@@ -42,13 +83,18 @@ fun CryptoTransferScreen(showHeader: Boolean = true) {
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             Column {
-                TransactionRow(Icons.Outlined.CreditCard, "Crypto (-$2,73)", hasArrow = true, contentColor = Color.Black)
+                TransactionRow(Icons.Outlined.CreditCard, fromAccount?.name ?: "Crypto", hasArrow = true, contentColor = Color.Black)
                 TransactionDivider()
-                TransactionRow(Icons.Outlined.CreditCard, "To Account", hasArrow = true, contentColor = Color.LightGray)
+                TransactionRow(
+                    icon = Icons.Outlined.CreditCard, 
+                    label = selectedToAccount?.name ?: "To Account", 
+                    hasArrow = true, 
+                    contentColor = if (selectedToAccount == null) Color.LightGray else Color.Black
+                )
             }
 
             IconButton(
-                onClick = { },
+                onClick = { /* Swap */ },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 36.dp)
@@ -57,21 +103,31 @@ fun CryptoTransferScreen(showHeader: Boolean = true) {
             ) {
                 Icon(Icons.Default.SwapVert, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
             }
+
+            // To Account Selector overlay
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(y = 56.dp)
+                    .height(56.dp)
+                    .clickable { showAccountPicker = true }
+            )
         }
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "0,00", middleText = "Sent", trailingText = "USD", hasArrow = true, contentColor = Color.Black)
+        TransactionInputRow(Icons.Outlined.AddCircle, value = amount, onValueChange = { amount = it }, placeholder = "0,00", middleText = "Sent", trailingText = "USD")
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "0,00", middleText = "Transfer Fee", trailingText = "USD", hasArrow = true, contentColor = Color.LightGray)
+        TransactionInputRow(Icons.Outlined.AddCircle, value = fee, onValueChange = { fee = it }, placeholder = "0,00", middleText = "Transfer Fee", trailingText = "USD")
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "0,00", middleText = "Received", trailingText = "USD", hasArrow = true, contentColor = Color.LightGray)
+        TransactionInputRow(Icons.Outlined.AddCircle, value = receivedAmount, onValueChange = { receivedAmount = it }, placeholder = "0,00", middleText = "Received", trailingText = "USD")
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.FontDownload, "Description", hasArrow = true, contentColor = Color.LightGray)
+        TransactionInputRow(Icons.Outlined.FontDownload, value = description, onValueChange = { description = it }, placeholder = "Description", hasArrow = true)
         TransactionDivider()
 
+        // Send date
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.CalendarMonth, null, tint = Color.Gray)
             Spacer(Modifier.width(12.dp))
@@ -83,6 +139,7 @@ fun CryptoTransferScreen(showHeader: Boolean = true) {
         }
         TransactionDivider()
 
+        // Receive date
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Outlined.CalendarToday, null, tint = Color.Gray)
             Spacer(Modifier.width(12.dp))
@@ -103,15 +160,29 @@ fun CryptoTransferScreen(showHeader: Boolean = true) {
         }
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.Description, "Memo", contentColor = Color.LightGray)
-        TransactionDivider()
+        TransactionInputRow(Icons.Outlined.Description, value = memo, onValueChange = { memo = it }, placeholder = "Memo")
+    }
 
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Icon(Icons.Outlined.Image, null, tint = Color.Gray)
-            Icon(Icons.Outlined.AddCircleOutline, null, tint = Color(0xFF3478F6))
-        }
-        TransactionDivider()
-
-        TransactionRow(Icons.Outlined.LocalOffer, "Tags", hasArrow = true, contentColor = Color.LightGray)
+    if (showAccountPicker) {
+        AlertDialog(
+            onDismissRequest = { showAccountPicker = false },
+            title = { Text("Select Target Account") },
+            text = {
+                androidx.compose.foundation.lazy.LazyColumn {
+                    items(allAccounts.filter { it.id != fromAccount?.id }) { account ->
+                        DropdownMenuItem(
+                            text = { Text(account.name) },
+                            onClick = {
+                                selectedToAccount = account
+                                showAccountPicker = false
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAccountPicker = false }) { Text("Cancel") }
+            }
+        )
     }
 }

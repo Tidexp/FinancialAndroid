@@ -10,5 +10,6 @@ data class AccountGroupEntity(
     val iconName: String?,
     val iconUri: String?,
     val color: Int,
-    val lastUpdated: Long = System.currentTimeMillis()
+    val lastUpdated: Long = System.currentTimeMillis(),
+    val orderIndex: Int = 0
 )

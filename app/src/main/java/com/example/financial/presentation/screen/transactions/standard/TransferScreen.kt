@@ -1,7 +1,10 @@
 package com.example.financial.presentation.screen.transactions.standard
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -12,18 +15,56 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.Account
+import com.example.financial.domain.model.Transaction
+import com.example.financial.domain.model.TransactionStatus
+import com.example.financial.domain.model.TransactionType
 import com.example.financial.presentation.component.*
+import java.util.UUID
 
 @Composable
-fun TransferScreen(showHeader: Boolean = true) {
+fun TransferScreen(
+    showHeader: Boolean = true,
+    fromAccount: Account? = null,
+    allAccounts: List<Account> = emptyList(),
+    onSave: (Transaction) -> Unit = {},
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
+) {
+    var amount by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var memo by remember { mutableStateOf("") }
     var isCleared by remember { mutableStateOf(true) }
+    
+    var selectedToAccount by remember { mutableStateOf<Account?>(null) }
+    var showAccountPicker by remember { mutableStateOf(false) }
+
+    val saveAction = {
+        val amountValue = amount.toDoubleOrNull() ?: 0.0
+        if (amountValue > 0 && fromAccount != null && selectedToAccount != null) {
+            onSave(
+                Transaction(
+                    id = UUID.randomUUID().toString(),
+                    type = TransactionType.TRANSFER,
+                    fromAccountId = fromAccount.id,
+                    toAccountId = selectedToAccount!!.id,
+                    amount = amountValue,
+                    description = description,
+                    memo = memo,
+                    status = if (isCleared) TransactionStatus.CLEARED else TransactionStatus.PENDING
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(amount, description, memo, isCleared, fromAccount, selectedToAccount) {
+        onRegisterSaveAction(saveAction)
+    }
 
     TransactionBaseScreen(
         title = "Transfer",
         onCloseClick = { },
-        onSaveClick = { },
+        onSaveClick = saveAction,
         showHeader = showHeader,
         typeSelector = {
             Row(
@@ -41,13 +82,18 @@ fun TransferScreen(showHeader: Boolean = true) {
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             Column {
-                TransactionRow(Icons.Outlined.CreditCard, "Select Account", hasArrow = true)
+                TransactionRow(Icons.Outlined.CreditCard, fromAccount?.name ?: "Select Account", hasArrow = true)
                 TransactionDivider()
-                TransactionRow(Icons.Outlined.CreditCard, "To Account", hasArrow = true)
+                TransactionRow(
+                    icon = Icons.Outlined.CreditCard, 
+                    label = selectedToAccount?.name ?: "To Account", 
+                    hasArrow = true,
+                    contentColor = if (selectedToAccount == null) Color.LightGray else Color.Black
+                )
             }
 
             IconButton(
-                onClick = { },
+                onClick = { /* Swap logic */ },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 36.dp)
@@ -61,20 +107,33 @@ fun TransferScreen(showHeader: Boolean = true) {
                     modifier = Modifier.size(16.dp)
                 )
             }
+            
+            // To Account Selector (Clickable overlay on the second row)
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(y = 56.dp) // Height of first row
+                    .height(56.dp)
+                    .clickable { showAccountPicker = true }
+            )
         }
         TransactionDivider()
 
-        TransactionRow(
+        TransactionInputRow(
             icon = Icons.Outlined.AddCircle,
-            label = "0,00",
-            middleText = "Transfer amount",
-            trailingText = "USD",
-            hasArrow = true,
-            contentColor = Color.LightGray
+            value = amount,
+            onValueChange = { amount = it },
+            placeholder = "0,00",
+            trailingText = "USD"
         )
         TransactionDivider()
 
-        TransactionRow(icon = Icons.Outlined.FontDownload, label = "Description", hasArrow = true, contentColor = Color.LightGray)
+        TransactionInputRow(
+            icon = Icons.Outlined.FontDownload,
+            value = description,
+            onValueChange = { description = it },
+            placeholder = "Description"
+        )
         TransactionDivider()
 
         // Send date
@@ -109,7 +168,12 @@ fun TransferScreen(showHeader: Boolean = true) {
         }
         TransactionDivider()
 
-        TransactionRow(icon = Icons.Outlined.Description, label = "Memo", contentColor = Color.LightGray)
+        TransactionInputRow(
+            icon = Icons.Outlined.Description,
+            value = memo,
+            onValueChange = { memo = it },
+            placeholder = "Memo"
+        )
         TransactionDivider()
 
         // Attachment
@@ -121,10 +185,27 @@ fun TransferScreen(showHeader: Boolean = true) {
 
         TransactionRow(icon = Icons.Outlined.LocalOffer, label = "Tags", hasArrow = true, contentColor = Color.LightGray)
     }
-}
 
-@Preview(showBackground = true)
-@Composable
-fun TransferScreenPreview() {
-    TransferScreen()
+    if (showAccountPicker) {
+        AlertDialog(
+            onDismissRequest = { showAccountPicker = false },
+            title = { Text("Select Target Account") },
+            text = {
+                LazyColumn {
+                    items(allAccounts.filter { it.id != fromAccount?.id }) { account ->
+                        DropdownMenuItem(
+                            text = { Text(account.name) },
+                            onClick = {
+                                selectedToAccount = account
+                                showAccountPicker = false
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAccountPicker = false }) { Text("Cancel") }
+            }
+        )
+    }
 }

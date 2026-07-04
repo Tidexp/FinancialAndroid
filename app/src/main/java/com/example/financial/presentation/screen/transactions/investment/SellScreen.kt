@@ -10,18 +10,56 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.Account
+import com.example.financial.domain.model.Transaction
+import com.example.financial.domain.model.TransactionStatus
+import com.example.financial.domain.model.TransactionType
 import com.example.financial.presentation.component.*
+import java.util.UUID
 
 @Composable
-fun SellScreen(showHeader: Boolean = true) {
+fun SellScreen(
+    showHeader: Boolean = true,
+    account: Account? = null,
+    onSave: (Transaction) -> Unit = {},
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
+) {
+    var symbol by remember { mutableStateOf("") }
+    var shares by remember { mutableStateOf("") }
+    var pricePerShare by remember { mutableStateOf("") }
+    var commission by remember { mutableStateOf("") }
+    var memo by remember { mutableStateOf("") }
     var isCleared by remember { mutableStateOf(true) }
+
+    val saveAction = {
+        val totalAmount = (shares.toDoubleOrNull() ?: 0.0) * (pricePerShare.toDoubleOrNull() ?: 0.0) - (commission.toDoubleOrNull() ?: 0.0)
+        if (totalAmount > 0 && account != null) {
+            onSave(
+                Transaction(
+                    id = UUID.randomUUID().toString(),
+                    type = TransactionType.SELL,
+                    fromAccountId = account.id,
+                    amount = totalAmount,
+                    symbol = symbol,
+                    shares = shares.toDoubleOrNull(),
+                    pricePerShare = pricePerShare.toDoubleOrNull(),
+                    commission = commission.toDoubleOrNull(),
+                    memo = memo,
+                    status = if (isCleared) TransactionStatus.CLEARED else TransactionStatus.PENDING
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(symbol, shares, pricePerShare, commission, memo, isCleared, account) {
+        onRegisterSaveAction(saveAction)
+    }
 
     TransactionBaseScreen(
         title = "Sell",
         onCloseClick = { },
-        onSaveClick = { },
+        onSaveClick = saveAction,
         showHeader = showHeader,
         typeSelector = {
             Row(
@@ -39,22 +77,23 @@ fun SellScreen(showHeader: Boolean = true) {
             }
         }
     ) {
-        TransactionRow(Icons.Outlined.Search, "Symbol", contentColor = Color.LightGray)
+        TransactionInputRow(icon = Icons.Outlined.Search, value = symbol, onValueChange = { symbol = it }, placeholder = "Symbol")
         TransactionDivider()
 
         TransactionRow(Icons.Outlined.Assignment, "Asset Class", hasArrow = true, contentColor = Color(0xFF3A3A3C))
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "Number of shares", middleText = "Number of shares", contentColor = Color.LightGray)
+        TransactionInputRow(icon = Icons.Outlined.AddCircle, value = shares, onValueChange = { shares = it }, placeholder = "Number of shares")
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "Price per share", middleText = "Price per share", contentColor = Color.LightGray)
+        TransactionInputRow(icon = Icons.Outlined.AddCircle, value = pricePerShare, onValueChange = { pricePerShare = it }, placeholder = "Price per share")
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "0,00", middleText = "Total price", contentColor = Color.Black)
+        val total = (shares.toDoubleOrNull() ?: 0.0) * (pricePerShare.toDoubleOrNull() ?: 0.0)
+        TransactionRow(Icons.Outlined.AddCircle, String.format("%.2f", total), middleText = "Total price", contentColor = Color.Black)
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.AddCircle, "0,0000", middleText = "Commission", contentColor = Color.LightGray)
+        TransactionInputRow(icon = Icons.Outlined.AddCircle, value = commission, onValueChange = { commission = it }, placeholder = "Commission")
         TransactionDivider()
 
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -77,21 +116,6 @@ fun SellScreen(showHeader: Boolean = true) {
         }
         TransactionDivider()
 
-        TransactionRow(Icons.Outlined.FontDownload, "Description", hasArrow = true, contentColor = Color.LightGray)
-        TransactionDivider()
-
-        TransactionRow(Icons.Outlined.Description, "Memo", contentColor = Color.LightGray)
-        TransactionDivider()
-
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Icon(Icons.Outlined.Image, null, tint = Color.Gray)
-            Icon(Icons.Outlined.AddCircleOutline, null, tint = Color(0xFF3478F6))
-        }
+        TransactionInputRow(icon = Icons.Outlined.Description, value = memo, onValueChange = { memo = it }, placeholder = "Memo")
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewSellScreen() {
-    SellScreen()
 }

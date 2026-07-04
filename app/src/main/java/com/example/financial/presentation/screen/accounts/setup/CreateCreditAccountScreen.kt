@@ -26,8 +26,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import com.example.financial.domain.model.AccountGroup
+import com.example.financial.domain.model.Budget
 
-// Định nghĩa màu hồng/đỏ chủ đạo cho Credit Account
 val CreditPrimaryColor = Color(0xFFE91E63)
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,15 +42,15 @@ fun CreateCreditAccountScreen(
         statementCloseDay: String,
         autoClear: Boolean,
         additionalInfo: String,
-        groupId: String?
+        groupId: String?,
+        monitoredByBudgetId: String?
     ) -> Unit,
-    groups: List<AccountGroup> = emptyList()
+    groups: List<AccountGroup> = emptyList(),
+    budgets: List<Budget> = emptyList()
 ) {
-    // --- STATE HOISTING ---
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
 
-    // Basic States
     var accountName by remember { mutableStateOf("") }
     var selectedIcon by remember { mutableStateOf<ImageVector?>(null) }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -60,13 +60,14 @@ fun CreateCreditAccountScreen(
     var balanceBoxDisplayMode by remember { mutableStateOf("Balance") }
     var autoClear by remember { mutableStateOf(true) }
 
-    // Advanced States
     var additionalInfo by remember { mutableStateOf("") }
     var includeInNetWorth by remember { mutableStateOf(true) }
     var includeInGroupBalance by remember { mutableStateOf(true) }
     var statementCloseDay by remember { mutableStateOf("31") }
     var selectedGroupId by remember { mutableStateOf<String?>(null) }
     var showGroupPicker by remember { mutableStateOf(false) }
+    var selectedBudgetId by remember { mutableStateOf<String?>(null) }
+    var showBudgetPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -96,7 +97,8 @@ fun CreateCreditAccountScreen(
                                     statementCloseDay,
                                     autoClear,
                                     additionalInfo,
-                                    selectedGroupId
+                                    selectedGroupId,
+                                    selectedBudgetId
                                 )
                             }
                         },
@@ -177,7 +179,9 @@ fun CreateCreditAccountScreen(
                             statementCloseDay = statementCloseDay,
                             onDayChange = { statementCloseDay = it },
                             selectedGroupName = groups.find { it.id == selectedGroupId }?.name ?: "Select",
-                            onGroupClick = { showGroupPicker = true }
+                            onGroupClick = { showGroupPicker = true },
+                            selectedBudgetName = budgets.find { it.id == selectedBudgetId }?.name ?: "None",
+                            onBudgetClick = { showBudgetPicker = true }
                         )
                     }
                 }
@@ -220,6 +224,34 @@ fun CreateCreditAccountScreen(
                             headlineContent = { Text(group.name) },
                             leadingContent = { 
                                 Box(modifier = Modifier.size(24.dp).background(group.color, CircleShape))
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showBudgetPicker) {
+            ModalBottomSheet(onDismissRequest = { showBudgetPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Budget", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedBudgetId = null
+                            showBudgetPicker = false 
+                        },
+                        headlineContent = { Text("None") }
+                    )
+                    budgets.forEach { budget ->
+                        ListItem(
+                            modifier = Modifier.clickable { 
+                                selectedBudgetId = budget.id
+                                showBudgetPicker = false 
+                            },
+                            headlineContent = { Text(budget.name) },
+                            leadingContent = { 
+                                Box(modifier = Modifier.size(24.dp).background(budget.color, CircleShape))
                             }
                         )
                     }
@@ -396,7 +428,9 @@ fun CreditAdvancedFields(
     statementCloseDay: String,
     onDayChange: (String) -> Unit,
     selectedGroupName: String,
-    onGroupClick: () -> Unit
+    onGroupClick: () -> Unit,
+    selectedBudgetName: String,
+    onBudgetClick: () -> Unit
 ) {
     Column {
         ListItem(
@@ -459,7 +493,8 @@ fun CreditAdvancedFields(
         ClickableCreditItem(
             leadingIcon = Icons.Default.PieChart,
             label = "Monitored by Budgets",
-            value = "Shopee"
+            value = selectedBudgetName,
+            onClick = onBudgetClick
         )
         CreditDivider()
 

@@ -30,17 +30,6 @@ fun AccountDetailScreen(
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    val transactionTabs = remember(account.type) {
-        val tabs = mutableListOf("Expense", "Income", "Transfer", "Adjust Balance")
-        if (account.type == AccountType.FOREX) {
-            tabs.add("Exchange")
-        } else if (account.type == AccountType.INVESTMENT) {
-            tabs.add("Buy")
-            tabs.add("Sell")
-        }
-        tabs
-    }
-
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(

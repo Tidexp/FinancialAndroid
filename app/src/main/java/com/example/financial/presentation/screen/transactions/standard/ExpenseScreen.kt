@@ -14,16 +14,52 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.Account
+import com.example.financial.domain.model.Transaction
+import com.example.financial.domain.model.TransactionStatus
+import com.example.financial.domain.model.TransactionType
 import com.example.financial.presentation.component.*
+import java.util.UUID
 
 @Composable
-fun ExpenseScreen(showHeader: Boolean = true) {
+fun ExpenseScreen(
+    showHeader: Boolean = true,
+    account: Account? = null,
+    onSave: (Transaction) -> Unit = {},
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
+) {
+    var amount by remember { mutableStateOf("") }
+    var payee by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var memo by remember { mutableStateOf("") }
     var isCleared by remember { mutableStateOf(true) }
+
+    val saveAction = {
+        val amountValue = amount.toDoubleOrNull() ?: 0.0
+        if (amountValue > 0 && account != null) {
+            onSave(
+                Transaction(
+                    id = UUID.randomUUID().toString(),
+                    type = TransactionType.EXPENSE,
+                    fromAccountId = account.id,
+                    amount = amountValue,
+                    payee = payee,
+                    description = description,
+                    memo = memo,
+                    status = if (isCleared) TransactionStatus.CLEARED else TransactionStatus.PENDING
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(amount, payee, description, memo, isCleared, account) {
+        onRegisterSaveAction(saveAction)
+    }
 
     TransactionBaseScreen(
         title = "Expense",
         onCloseClick = { },
-        onSaveClick = { },
+        onSaveClick = saveAction,
         showHeader = showHeader,
         typeSelector = {
             Row(
@@ -39,25 +75,35 @@ fun ExpenseScreen(showHeader: Boolean = true) {
             }
         }
     ) {
-        TransactionRow(icon = Icons.Outlined.CreditCard, label = "Select Account", hasArrow = true)
+        TransactionRow(icon = Icons.Outlined.CreditCard, label = account?.name ?: "Select Account", hasArrow = true)
         TransactionDivider()
 
-        TransactionRow(
+        TransactionInputRow(
             icon = Icons.Outlined.AddCircle,
-            label = "0,00",
-            trailingText = "USD",
-            hasArrow = true,
-            contentColor = Color.LightGray
+            value = amount,
+            onValueChange = { amount = it },
+            placeholder = "0,00",
+            trailingText = "USD"
         )
         TransactionDivider()
 
-        TransactionRow(icon = Icons.Outlined.Person, label = "Payee", hasArrow = true, contentColor = Color.LightGray)
+        TransactionInputRow(
+            icon = Icons.Outlined.Person,
+            value = payee,
+            onValueChange = { payee = it },
+            placeholder = "Payee"
+        )
         TransactionDivider()
 
-        TransactionRow(icon = Icons.Outlined.FontDownload, label = "Description", hasArrow = true, contentColor = Color.LightGray)
+        TransactionInputRow(
+            icon = Icons.Outlined.FontDownload,
+            value = description,
+            onValueChange = { description = it },
+            placeholder = "Description"
+        )
         TransactionDivider()
 
-        // Category & Split row
+        // Category & Split row (Still static for now)
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Row(
                 modifier = Modifier
@@ -111,7 +157,12 @@ fun ExpenseScreen(showHeader: Boolean = true) {
         }
         TransactionDivider()
 
-        TransactionRow(icon = Icons.Outlined.Description, label = "Memo", contentColor = Color.LightGray)
+        TransactionInputRow(
+            icon = Icons.Outlined.Description,
+            value = memo,
+            onValueChange = { memo = it },
+            placeholder = "Memo"
+        )
         TransactionDivider()
 
         // Images
@@ -127,10 +178,4 @@ fun ExpenseScreen(showHeader: Boolean = true) {
 
         TransactionRow(icon = Icons.Outlined.LocalOffer, label = "Tags", hasArrow = true, contentColor = Color.LightGray)
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun ExpenseScreenPreview() {
-    ExpenseScreen()
 }

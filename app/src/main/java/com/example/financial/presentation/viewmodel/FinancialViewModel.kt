@@ -19,8 +19,9 @@ data class HomeUiState(
     val balanceData: BalanceData? = null,
     val accounts: List<Account> = emptyList(),
     val accountGroups: List<AccountGroup> = emptyList(),
-    val transactions: List<Transaction> = emptyList(),
     val budgets: List<Budget> = emptyList(),
+    val budgetGroups: List<BudgetGroup> = emptyList(),
+    val transactions: List<Transaction> = emptyList(),
     val remainingBudget: String = "$0.00",
     val totalBudgeted: String = "$0.00",
     val isLoading: Boolean = false,
@@ -51,6 +52,7 @@ class FinancialViewModel(
                     database.transactionDao(),
                     database.accountDao(),
                     database.accountGroupDao(),
+                    database.budgetDao(),
                     firestore,
                     auth
                 )
@@ -140,6 +142,47 @@ class FinancialViewModel(
         }
     }
 
+    fun addBudget(
+        name: String,
+        amount: Double,
+        isIncome: Boolean,
+        color: androidx.compose.ui.graphics.Color,
+        groupId: String? = null,
+        startDate: Long = System.currentTimeMillis(),
+        repeatEnabled: Boolean = true,
+        frequencyValue: Int = 1,
+        frequencyUnit: String = "month",
+        rolloverEnabled: Boolean = false
+    ) {
+        viewModelScope.launch {
+            val budget = Budget(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                amount = amount,
+                isIncome = isIncome,
+                color = color,
+                budgetGroupId = groupId,
+                startDate = startDate,
+                repeatEnabled = repeatEnabled,
+                frequencyValue = frequencyValue,
+                frequencyUnit = frequencyUnit,
+                rolloverEnabled = rolloverEnabled
+            )
+            repository.addBudget(budget)
+        }
+    }
+
+    fun addBudgetGroup(name: String, color: androidx.compose.ui.graphics.Color) {
+        viewModelScope.launch {
+            val group = BudgetGroup(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                color = color
+            )
+            repository.addBudgetGroup(group)
+        }
+    }
+
     fun deleteAccount(account: Account) {
         viewModelScope.launch {
             repository.deleteAccount(account)
@@ -158,6 +201,64 @@ class FinancialViewModel(
         }
     }
 
+    fun updateAccountOrder(accounts: List<Account>) {
+        viewModelScope.launch {
+            accounts.forEachIndexed { index, account ->
+                repository.updateAccount(account.copy(orderIndex = index))
+            }
+        }
+    }
+
+    fun updateGroupOrder(groups: List<AccountGroup>) {
+        viewModelScope.launch {
+            groups.forEachIndexed { index, group ->
+                repository.updateAccountGroup(group.copy(orderIndex = index))
+            }
+        }
+    }
+
+    fun addTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            repository.addTransaction(transaction)
+            
+            // Update account balance(s)
+            val currentAccounts = _homeUiState.value.accounts
+            
+            when (transaction.type) {
+                TransactionType.EXPENSE -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { account ->
+                        val newBalance = parseBalance(account.balance) - transaction.amount
+                        repository.updateAccount(account.copy(balance = formatBalance(newBalance)))
+                    }
+                }
+                TransactionType.INCOME -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { account ->
+                        val newBalance = parseBalance(account.balance) + transaction.amount
+                        repository.updateAccount(account.copy(balance = formatBalance(newBalance)))
+                    }
+                }
+                TransactionType.TRANSFER -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { fromAcc ->
+                        val newFromBalance = parseBalance(fromAcc.balance) - transaction.amount
+                        repository.updateAccount(fromAcc.copy(balance = formatBalance(newFromBalance)))
+                    }
+                    transaction.toAccountId?.let { toId ->
+                        currentAccounts.find { it.id == toId }?.let { toAcc ->
+                            val newToBalance = parseBalance(toAcc.balance) + transaction.amount
+                            repository.updateAccount(toAcc.copy(balance = formatBalance(newToBalance)))
+                        }
+                    }
+                }
+                TransactionType.ADJUSTMENT -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { account ->
+                        repository.updateAccount(account.copy(balance = formatBalance(transaction.amount)))
+                    }
+                }
+                else -> {} // Handle others later
+            }
+        }
+    }
+
     fun addCreditAccount(
         name: String,
         balance: String,
@@ -166,7 +267,8 @@ class FinancialViewModel(
         statementCloseDay: String,
         autoClear: Boolean,
         additionalInfo: String,
-        groupId: String?
+        groupId: String?,
+        monitoredByBudgetId: String? = null
     ) {
         viewModelScope.launch {
             val account = Account(
@@ -180,7 +282,8 @@ class FinancialViewModel(
                 statementCloseDay = statementCloseDay,
                 autoClear = autoClear,
                 additionalInfo = additionalInfo,
-                groupId = groupId
+                groupId = groupId,
+                monitoredByBudgetId = monitoredByBudgetId
             )
             repository.addAccount(account)
         }
@@ -194,7 +297,8 @@ class FinancialViewModel(
         startDate: String,
         firstDueDate: String,
         groupId: String?,
-        additionalInfo: String
+        additionalInfo: String,
+        monitoredByBudgetId: String? = null
     ) {
         viewModelScope.launch {
             val account = Account(
@@ -209,7 +313,8 @@ class FinancialViewModel(
                 startDate = startDate,
                 firstDueDate = firstDueDate,
                 groupId = groupId,
-                additionalInfo = additionalInfo
+                additionalInfo = additionalInfo,
+                monitoredByBudgetId = monitoredByBudgetId
             )
             repository.addAccount(account)
         }
@@ -217,21 +322,23 @@ class FinancialViewModel(
 
     fun addInvestmentAccount(
         name: String,
-        cashBalance: String,
-        asOfDate: String,
+        balance: String,
+        date: String,
         groupId: String?,
-        additionalInfo: String
+        additionalInfo: String,
+        monitoredByBudgetId: String? = null
     ) {
         viewModelScope.launch {
             val account = Account(
                 id = java.util.UUID.randomUUID().toString(),
                 name = name,
-                balance = cashBalance,
+                balance = balance,
                 type = AccountType.INVESTMENT,
                 color = androidx.compose.ui.graphics.Color(0xFF2196F3),
-                asOfDate = asOfDate,
+                asOfDate = date,
                 groupId = groupId,
-                additionalInfo = additionalInfo
+                additionalInfo = additionalInfo,
+                monitoredByBudgetId = monitoredByBudgetId
             )
             repository.addAccount(account)
         }
@@ -241,7 +348,8 @@ class FinancialViewModel(
         name: String,
         currency: String,
         groupId: String?,
-        additionalInfo: String
+        additionalInfo: String,
+        monitoredByBudgetId: String? = null
     ) {
         viewModelScope.launch {
             val account = Account(
@@ -252,7 +360,8 @@ class FinancialViewModel(
                 color = androidx.compose.ui.graphics.Color(0xFFFF9800),
                 currency = currency,
                 groupId = groupId,
-                additionalInfo = additionalInfo
+                additionalInfo = additionalInfo,
+                monitoredByBudgetId = monitoredByBudgetId
             )
             repository.addAccount(account)
         }
@@ -264,7 +373,8 @@ class FinancialViewModel(
         type: AccountType,
         groupId: String?,
         autoClear: Boolean,
-        additionalInfo: String
+        additionalInfo: String,
+        monitoredByBudgetId: String? = null
     ) {
         viewModelScope.launch {
             val account = Account(
@@ -275,9 +385,24 @@ class FinancialViewModel(
                 color = androidx.compose.ui.graphics.Color(0xFF9C27B0),
                 groupId = groupId,
                 autoClear = autoClear,
-                additionalInfo = additionalInfo
+                additionalInfo = additionalInfo,
+                monitoredByBudgetId = monitoredByBudgetId
             )
             repository.addAccount(account)
+        }
+    }
+
+    private fun parseBalance(balance: String): Double {
+        return try {
+            balance.replace(Regex("[^0-9.-]"), "").toDouble()
+        } catch (e: Exception) {
+            0.0
+        }
+    }
+
+    private fun formatBalance(balance: Double): String {
+        return java.util.Locale.getDefault().let { locale ->
+            String.format(locale, "$%.2f", balance)
         }
     }
 
@@ -287,11 +412,18 @@ class FinancialViewModel(
                 repository.getBalanceData(),
                 repository.getAccounts(),
                 repository.getAccountGroups(),
-                repository.getTransactions(),
-                repository.getBudgets()
-            ) { balance, accounts, groups, transactions, budgets ->
-                // Create a partial state update
-                stateUpdate(balance, accounts, groups, transactions, budgets)
+                repository.getBudgets(),
+                repository.getBudgetGroups(),
+                repository.getTransactions()
+            ) { args: Array<Any> ->
+                stateUpdate(
+                    args[0] as BalanceData,
+                    args[1] as List<Account>,
+                    args[2] as List<AccountGroup>,
+                    args[3] as List<Budget>,
+                    args[4] as List<BudgetGroup>,
+                    args[5] as List<Transaction>
+                )
             }.flowOn(Dispatchers.IO)
                 .collect { update ->
                     _homeUiState.update { currentState ->
@@ -304,16 +436,18 @@ class FinancialViewModel(
     private fun stateUpdate(
         balance: BalanceData,
         accounts: List<Account>,
-        groups: List<AccountGroup>,
-        transactions: List<Transaction>,
-        budgets: List<Budget>
+        accountGroups: List<AccountGroup>,
+        budgets: List<Budget>,
+        budgetGroups: List<BudgetGroup>,
+        transactions: List<Transaction>
     ): (HomeUiState) -> HomeUiState = { currentState ->
         currentState.copy(
             balanceData = balance,
             accounts = accounts,
-            accountGroups = groups,
-            transactions = transactions,
+            accountGroups = accountGroups,
             budgets = budgets,
+            budgetGroups = budgetGroups,
+            transactions = transactions,
             isLoading = false
         )
     }

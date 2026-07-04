@@ -35,7 +35,9 @@ data class Account(
     // Investment specific
     val asOfDate: String? = null,
     // Forex specific
-    val currency: String? = null
+    val currency: String? = null,
+    val orderIndex: Int = 0,
+    val monitoredByBudgetId: String? = null
 )
 
 data class AccountGroup(
@@ -43,7 +45,8 @@ data class AccountGroup(
     val name: String,
     val iconName: String? = null,
     val iconUri: String? = null,
-    val color: Color
+    val color: Color,
+    val orderIndex: Int = 0
 )
 
 enum class AccountType(val displayName: String, val description: String, val icon: ImageVector) {
@@ -66,9 +69,22 @@ data class CategorySpending(
 data class Budget(
     val id: String,
     val name: String,
-    val amount: String,
-    val spent: String,
-    val remaining: String,
-    val progress: Float,
+    val amount: Double,
+    val isIncome: Boolean,
+    val color: Color,
+    val budgetGroupId: String? = null,
+    val startDate: Long = System.currentTimeMillis(),
+    val repeatEnabled: Boolean = true,
+    val frequencyValue: Int = 1,
+    val frequencyUnit: String = "month",
+    val rolloverEnabled: Boolean = false,
+    val spent: Double = 0.0,
+    val remaining: Double = 0.0,
+    val progress: Float = 0f
+)
+
+data class BudgetGroup(
+    val id: String,
+    val name: String,
     val color: Color
 )

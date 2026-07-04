@@ -3,6 +3,7 @@ package com.example.financial.presentation.screen.budgets
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -12,10 +13,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.Budget
 import com.example.financial.presentation.viewmodel.FinancialViewModel
+import java.util.Locale
 
 @Composable
 fun BudgetsScreen(
@@ -162,7 +167,7 @@ fun BudgetsScreen(
             }
         }
 
-        if (filteredBudgets.isEmpty()) {
+        if (filteredBudgets.isEmpty() && uiState.budgetGroups.isEmpty()) {
             item {
                 Text(
                     text = if (searchQuery.isBlank())
@@ -178,19 +183,99 @@ fun BudgetsScreen(
                 )
             }
         } else {
-            items(filteredBudgets) { budget ->
-                Text(
-                    text = budget.name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp),
-                    style = MaterialTheme.typography.bodyLarge
-                )
+            // Grouped budgets
+            uiState.budgetGroups.forEach { group ->
+                item {
+                    Text(
+                        text = group.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = group.color,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
+                val budgetsInGroup = filteredBudgets.filter { it.budgetGroupId == group.id }
+                items(budgetsInGroup) { budget ->
+                    BudgetItem(budget)
+                }
+            }
+            
+            // Ungrouped budgets
+            val unGroupedBudgets = filteredBudgets.filter { it.budgetGroupId == null }
+            if (unGroupedBudgets.isNotEmpty()) {
+                if (uiState.budgetGroups.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Ungrouped",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+                items(unGroupedBudgets) { budget ->
+                    BudgetItem(budget)
+                }
             }
         }
 
         item {
             Spacer(modifier = Modifier.height(80.dp))
+        }
+    }
+}
+
+@Composable
+fun BudgetItem(budget: Budget) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
+        )
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = budget.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (budget.isIncome) "Income" else "Expense",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (budget.isIncome) Color(0xFF4CAF50) else Color(0xFFF44336)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            LinearProgressIndicator(
+                progress = { budget.progress },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                color = budget.color,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = String.format(Locale.getDefault(), "$%.2f of $%.2f", budget.spent, budget.amount),
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = String.format(Locale.getDefault(), "$%.2f left", budget.remaining),
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (budget.remaining < 0) Color.Red else Color.Unspecified
+                )
+            }
         }
     }
 }

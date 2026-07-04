@@ -3,7 +3,10 @@ package com.example.financial.presentation.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -58,9 +61,9 @@ fun TransactionRow(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = Color.Gray)
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(text = label, color = contentColor)
+        Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(text = label, color = contentColor, fontSize = 16.sp)
 
         if (middleText != null) {
             Spacer(modifier = Modifier.weight(1f))
@@ -76,6 +79,47 @@ fun TransactionRow(
 
         if (trailingText != null) {
             Text(text = trailingText, color = Color.Gray, modifier = Modifier.padding(end = 4.dp))
+        }
+        if (hasArrow) {
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
+        }
+    }
+}
+
+@Composable
+fun TransactionInputRow(
+    icon: ImageVector,
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    middleText: String? = null,
+    trailingText: String? = null,
+    hasArrow: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(12.dp))
+        Box(modifier = Modifier.weight(1f)) {
+            if (value.isEmpty()) {
+                Text(text = placeholder, color = Color.LightGray, fontSize = 16.sp)
+            }
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = LocalTextStyle.current.copy(fontSize = 16.sp, color = Color.Black)
+            )
+        }
+        if (middleText != null) {
+            Text(text = middleText, color = Color.LightGray, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 8.dp))
+        }
+        if (trailingText != null) {
+            Text(text = trailingText, color = Color.Gray, modifier = Modifier.padding(start = 8.dp))
         }
         if (hasArrow) {
             Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color.Gray)
@@ -151,7 +195,8 @@ fun TransactionBaseScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF2F2F7))
-            .padding(16.dp)
+            .then(if (showHeader) Modifier.padding(16.dp) else Modifier)
+            .verticalScroll(rememberScrollState())
     ) {
         if (showHeader) {
             // Top Bar
@@ -205,8 +250,8 @@ fun TransactionBaseScreen(
                 content()
             }
         }
-
-        Spacer(modifier = Modifier.weight(1f))
+        
+        // ... (bottom buttons)
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             TransactionBottomActionButton("Options", Modifier.weight(1f))

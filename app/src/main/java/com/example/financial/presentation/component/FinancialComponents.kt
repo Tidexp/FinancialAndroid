@@ -1,6 +1,8 @@
 package com.example.financial.presentation.component
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,16 +15,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.financial.domain.model.Account
-import com.example.financial.domain.model.AccountGroup
-import com.example.financial.domain.model.BalanceData
-import com.example.financial.domain.model.Transaction
 import coil.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
+import com.example.financial.domain.model.*
+import java.text.SimpleDateFormat
+import java.util.*
 
 @Composable
 fun NetWorthCard(data: BalanceData) {
@@ -101,14 +104,26 @@ fun SummaryItem(label: String, amount: String, color: Color, modifier: Modifier 
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AccountGroupItem(
     group: AccountGroup,
-    onDeleteClick: (AccountGroup) -> Unit = {}
+    modifier: Modifier = Modifier,
+    isExpanded: Boolean = true,
+    onClick: (AccountGroup) -> Unit = {},
+    onLongClick: (AccountGroup) -> Unit = {}
 ) {
+    val haptic = LocalHapticFeedback.current
     Surface(
-        onClick = { /* TODO: Open group details */ },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { onClick(group) },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick(group)
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
     ) {
@@ -155,16 +170,8 @@ fun AccountGroupItem(
                 )
             }
             
-            IconButton(onClick = { onDeleteClick(group) }) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete Group",
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.6f)
-                )
-            }
-
             Icon(
-                imageVector = Icons.Default.ChevronRight,
+                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -172,14 +179,25 @@ fun AccountGroupItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AccountItem(
     account: Account,
-    onClick: (Account) -> Unit = {}
+    modifier: Modifier = Modifier,
+    onClick: (Account) -> Unit = {},
+    onLongClick: (Account) -> Unit = {}
 ) {
+    val haptic = LocalHapticFeedback.current
     Surface(
-        onClick = { onClick(account) },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { onClick(account) },
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick(account)
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
     ) {
@@ -228,6 +246,25 @@ fun AccountItem(
 
 @Composable
 fun TransactionItem(transaction: Transaction) {
+    val icon = when (transaction.type) {
+        TransactionType.EXPENSE -> Icons.Default.RemoveCircleOutline
+        TransactionType.INCOME -> Icons.Default.AddCircleOutline
+        TransactionType.TRANSFER -> Icons.Default.SwapHoriz
+        TransactionType.ADJUSTMENT -> Icons.Default.Adjust
+        TransactionType.EXCHANGE -> Icons.Default.Cached
+        TransactionType.BUY -> Icons.Default.ArrowCircleUp
+        TransactionType.SELL -> Icons.Default.ArrowCircleDown
+    }
+
+    val isExpense = transaction.type == TransactionType.EXPENSE || 
+                    transaction.type == TransactionType.BUY || 
+                    transaction.type == TransactionType.TRANSFER
+
+    val color = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
+
+    val dateStr = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+        .format(Date(transaction.date))
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -242,7 +279,7 @@ fun TransactionItem(transaction: Transaction) {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = transaction.icon,
+                imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
@@ -251,37 +288,43 @@ fun TransactionItem(transaction: Transaction) {
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = transaction.payee,
+                text = transaction.payee ?: transaction.description ?: "Transaction",
                 style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = transaction.category,
+                    text = transaction.type.name.lowercase().replaceFirstChar { it.uppercase() },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = " • ",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = transaction.accountName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (transaction.memo?.isNotBlank() == true) {
+                    Text(
+                        text = " • ",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = transaction.memo,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = (if (transaction.isExpense) "-" else "+") + "$" + transaction.amount,
+                text = (if (isExpense) "-" else "+") + String.format(Locale.getDefault(), "$%.2f", transaction.amount),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
-                color = if (transaction.isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
+                color = color
             )
             Text(
-                text = transaction.date,
+                text = dateStr,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

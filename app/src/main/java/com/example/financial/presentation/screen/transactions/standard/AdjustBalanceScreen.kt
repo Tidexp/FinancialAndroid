@@ -10,16 +10,48 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.Account
+import com.example.financial.domain.model.Transaction
+import com.example.financial.domain.model.TransactionStatus
+import com.example.financial.domain.model.TransactionType
 import com.example.financial.presentation.component.*
+import java.util.UUID
 
 @Composable
-fun AdjustBalanceScreen(showHeader: Boolean = true) {
+fun AdjustBalanceScreen(
+    showHeader: Boolean = true,
+    account: Account? = null,
+    onSave: (Transaction) -> Unit = {},
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
+) {
+    var newBalance by remember { mutableStateOf("") }
+    var memo by remember { mutableStateOf("") }
+
+    val saveAction = {
+        val balanceValue = newBalance.toDoubleOrNull() ?: 0.0
+        if (account != null) {
+            onSave(
+                Transaction(
+                    id = UUID.randomUUID().toString(),
+                    type = TransactionType.ADJUSTMENT,
+                    fromAccountId = account.id,
+                    amount = balanceValue,
+                    memo = memo,
+                    status = TransactionStatus.CLEARED
+                )
+            )
+        }
+    }
+
+    LaunchedEffect(newBalance, memo, account) {
+        onRegisterSaveAction(saveAction)
+    }
+
     TransactionBaseScreen(
         title = "Adjust Balance",
         onCloseClick = { },
-        onSaveClick = { },
+        onSaveClick = saveAction,
         showHeader = showHeader,
         typeSelector = {
             Row(
@@ -35,23 +67,24 @@ fun AdjustBalanceScreen(showHeader: Boolean = true) {
             }
         }
     ) {
-        TransactionRow(Icons.Outlined.CreditCard, "Select Account", hasArrow = true)
+        TransactionRow(icon = Icons.Outlined.CreditCard, label = account?.name ?: "Select Account", hasArrow = true)
         TransactionDivider()
 
         TransactionRow(
-            Icons.Outlined.AddCircle,
-            "0,00",
+            icon = Icons.Outlined.AddCircle,
+            label = account?.balance ?: "0,00",
             trailingText = "USD",
             hasArrow = true,
             contentColor = Color(0xFF8E8E93)
         )
         TransactionDivider()
 
-        TransactionRow(
-            Icons.Outlined.FontDownload,
-            "New balance",
-            hasArrow = true,
-            contentColor = Color(0xFF3A3A3C)
+        TransactionInputRow(
+            icon = Icons.Outlined.FontDownload,
+            value = newBalance,
+            onValueChange = { newBalance = it },
+            placeholder = "New balance",
+            trailingText = "USD"
         )
         TransactionDivider()
 
@@ -69,12 +102,11 @@ fun AdjustBalanceScreen(showHeader: Boolean = true) {
         }
         TransactionDivider()
 
-        TransactionRow(icon = Icons.Outlined.Description, label = "Memo", contentColor = Color.LightGray)
+        TransactionInputRow(
+            icon = Icons.Outlined.Description,
+            value = memo,
+            onValueChange = { memo = it },
+            placeholder = "Memo"
+        )
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-fun PreviewAdjustBalance() {
-    AdjustBalanceScreen()
 }

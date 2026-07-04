@@ -12,8 +12,7 @@ import androidx.navigation.navArgument
 import com.example.financial.presentation.screen.accounts.AccountsScreen
 import com.example.financial.presentation.screen.accounts.setup.*
 import com.example.financial.presentation.screen.budgets.BudgetsScreen
-import com.example.financial.presentation.screen.budgets.setup.CreateExpenseBudgetsScreen
-import com.example.financial.presentation.screen.budgets.setup.CreateIncomeBudgetScreen
+import com.example.financial.presentation.screen.budgets.setup.*
 import com.example.financial.presentation.screen.reports.ReportsScreen
 import com.example.financial.presentation.screen.scheduled.ScheduledScreen
 import com.example.financial.presentation.screen.settings.SettingsScreen
@@ -41,6 +40,9 @@ fun NavGraph(navController: NavHostController) {
                 },
                 onAccountClick = { accountId ->
                     navController.navigate("account_detail/$accountId")
+                },
+                onNavigateToTransaction = { accountId, type ->
+                    navController.navigate("add_transaction/$accountId/$type")
                 }
             )
         }
@@ -90,11 +92,12 @@ fun NavGraph(navController: NavHostController) {
             CreateStandardAccountScreen(
                 accountType = accountType,
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { name, balance, type, groupId, autoClear, info ->
-                    viewModel.addStandardAccount(name, balance, type, groupId, autoClear, info)
+                onSaveClick = { name, balance, type, groupId, autoClear, info, monitoredByBudgetId ->
+                    viewModel.addStandardAccount(name, balance, type, groupId, autoClear, info, monitoredByBudgetId)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
                 },
-                groups = uiState.accountGroups
+                groups = uiState.accountGroups,
+                budgets = uiState.budgets
             )
         }
 
@@ -103,11 +106,12 @@ fun NavGraph(navController: NavHostController) {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateCreditAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { name, balance, limit, icon, day, autoClear, info, groupId ->
-                    viewModel.addCreditAccount(name, balance, limit, icon, day, autoClear, info, groupId)
+                onSaveClick = { name, balance, limit, icon, day, autoClear, info, groupId, monitoredByBudgetId ->
+                    viewModel.addCreditAccount(name, balance, limit, icon, day, autoClear, info, groupId, monitoredByBudgetId)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
                 },
-                groups = uiState.accountGroups
+                groups = uiState.accountGroups,
+                budgets = uiState.budgets
             )
         }
 
@@ -128,11 +132,12 @@ fun NavGraph(navController: NavHostController) {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateLoanAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { name, principal, apr, duration, start, first, groupId, info ->
-                    viewModel.addLoanAccount(name, principal, apr, duration, start, first, groupId, info)
+                onSaveClick = { name, principal, apr, duration, start, first, groupId, info, monitoredByBudgetId ->
+                    viewModel.addLoanAccount(name, principal, apr, duration, start, first, groupId, info, monitoredByBudgetId)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
                 },
-                groups = uiState.accountGroups
+                groups = uiState.accountGroups,
+                budgets = uiState.budgets
             )
         }
 
@@ -141,11 +146,12 @@ fun NavGraph(navController: NavHostController) {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateInvestmentAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { name, balance, date, groupId, info ->
-                    viewModel.addInvestmentAccount(name, balance, date, groupId, info)
+                onSaveClick = { name, balance, date, groupId, info, monitoredByBudgetId ->
+                    viewModel.addInvestmentAccount(name, balance, date, groupId, info, monitoredByBudgetId)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
                 },
-                groups = uiState.accountGroups
+                groups = uiState.accountGroups,
+                budgets = uiState.budgets
             )
         }
 
@@ -153,11 +159,12 @@ fun NavGraph(navController: NavHostController) {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateForexCryptoAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { name, currency, groupId, info ->
-                    viewModel.addForexAccount(name, currency, groupId, info)
+                onSaveClick = { name, currency, groupId, info, monitoredByBudgetId ->
+                    viewModel.addForexAccount(name, currency, groupId, info, monitoredByBudgetId)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
                 },
-                groups = uiState.accountGroups
+                groups = uiState.accountGroups,
+                budgets = uiState.budgets
             )
         }
 
@@ -179,7 +186,7 @@ fun NavGraph(navController: NavHostController) {
                         navController.popBackStack()
                     },
                     onNavigateToTransaction = { type ->
-                        navController.navigate("add_transaction/${account.id}")
+                        navController.navigate("add_transaction/${account.id}/$type")
                     }
                 )
             }
@@ -187,14 +194,20 @@ fun NavGraph(navController: NavHostController) {
 
         composable(
             route = Screen.AddTransaction.route,
-            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+            arguments = listOf(
+                navArgument("accountId") { type = NavType.StringType },
+                navArgument("type") { type = NavType.StringType; nullable = true }
+            )
         ) { backStackEntry ->
             val accountId = backStackEntry.arguments?.getString("accountId")
+            val type = backStackEntry.arguments?.getString("type")
             val uiState by viewModel.homeUiState.collectAsState()
             val account = uiState.accounts.find { it.id == accountId }
 
             AddTransactionScreen(
+                viewModel = viewModel,
                 account = account,
+                initialType = type,
                 onBackClick = { navController.popBackStack() }
             )
         }
@@ -216,20 +229,34 @@ fun NavGraph(navController: NavHostController) {
         }
 
         composable(Screen.AddExpenseBudget.route) {
+            val uiState by viewModel.homeUiState.collectAsState()
             CreateExpenseBudgetsScreen(
                 onCloseClick = { navController.popBackStack() },
-                onSaveClick = {
-                    // Logic lưu budget có thể được xử lý trong ViewModel sau
+                onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover ->
+                    viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover)
                     navController.popBackStack()
-                }
+                },
+                budgetGroups = uiState.budgetGroups
             )
         }
 
         composable(Screen.AddIncomeBudget.route) {
+            val uiState by viewModel.homeUiState.collectAsState()
             CreateIncomeBudgetScreen(
                 onCloseClick = { navController.popBackStack() },
-                onSaveClick = {
-                    // Logic lưu budget có thể được xử lý trong ViewModel sau
+                onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover ->
+                    viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover)
+                    navController.popBackStack()
+                },
+                budgetGroups = uiState.budgetGroups
+            )
+        }
+
+        composable(Screen.AddBudgetsGroup.route) {
+            CreateBudgetGroupScreen(
+                onBackClick = { navController.popBackStack() },
+                onSaveClick = { name, color ->
+                    viewModel.addBudgetGroup(name, color)
                     navController.popBackStack()
                 }
             )

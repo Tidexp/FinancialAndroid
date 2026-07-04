@@ -27,11 +27,15 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun AddTransactionScreen(
+    viewModel: com.example.financial.presentation.viewmodel.FinancialViewModel,
     account: Account?,
+    initialType: String? = null,
     onBackClick: () -> Unit
 ) {
+    val uiState by viewModel.homeUiState.collectAsState()
+    
     val tabs = remember(account?.type) {
-        val list = mutableListOf("Expense", "Income", "Transfer", "Adjust")
+        val list = mutableListOf("Expense", "Income", "Transfer", "Adjust Balance")
         if (account?.type == AccountType.FOREX) {
             list.add("Exchange")
         } else if (account?.type == AccountType.INVESTMENT) {
@@ -43,13 +47,26 @@ fun AddTransactionScreen(
 
     val pagerState = rememberPagerState { tabs.size }
     val scope = rememberCoroutineScope()
+    var currentSaveAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    LaunchedEffect(initialType) {
+        if (initialType != null) {
+            val index = tabs.indexOf(initialType)
+            if (index != -1) {
+                pagerState.scrollToPage(index)
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFF2F2F7))
-            .padding(16.dp)
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp)
     ) {
+        Spacer(modifier = Modifier.height(23.dp))
+
         // --- TOP BAR (Unifying headers) ---
         Row(
             modifier = Modifier
@@ -80,7 +97,7 @@ fun AddTransactionScreen(
                         "Expense" -> Icons.Outlined.RemoveCircleOutline
                         "Income" -> Icons.Outlined.AddCircleOutline
                         "Transfer" -> Icons.Default.SwapHoriz
-                        "Adjust" -> Icons.Outlined.DragHandle
+                        "Adjust Balance" -> Icons.Outlined.DragHandle
                         "Exchange" -> Icons.Outlined.Cached
                         "Buy" -> Icons.Outlined.ArrowCircleUp
                         "Sell" -> Icons.Outlined.ArrowCircleDown
@@ -98,12 +115,14 @@ fun AddTransactionScreen(
                 }
             }
 
-            // Save Button
+            // Unified Save Button
             Button(
-                onClick = { /* Save current page logic */ },
+                onClick = { currentSaveAction?.invoke() },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
                 shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 24.dp)
+                contentPadding = PaddingValues(horizontal = 24.dp),
+                modifier = Modifier.height(40.dp),
+                enabled = currentSaveAction != null
             ) {
                 Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
             }
@@ -114,7 +133,7 @@ fun AddTransactionScreen(
         // Title (Dynamic)
         Text(
             text = tabs[pagerState.currentPage],
-            fontSize = 20.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.CenterHorizontally),
             color = Color.Black
@@ -124,24 +143,76 @@ fun AddTransactionScreen(
 
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-            userScrollEnabled = true
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            userScrollEnabled = true,
+            contentPadding = PaddingValues(bottom = 16.dp),
+            verticalAlignment = Alignment.Top
         ) { page ->
-            // Pass showHeader = false to suppress internal headers
             when (tabs[page]) {
-                "Expense" -> ExpenseScreen(showHeader = false)
-                "Income" -> IncomeScreen(showHeader = false)
+                "Expense" -> ExpenseScreen(
+                    showHeader = false, 
+                    account = account,
+                    onSave = { transaction ->
+                        viewModel.addTransaction(transaction)
+                        onBackClick()
+                    },
+                    onRegisterSaveAction = { currentSaveAction = it }
+                )
+                "Income" -> IncomeScreen(
+                    showHeader = false,
+                    account = account,
+                    onSave = { transaction ->
+                        viewModel.addTransaction(transaction)
+                        onBackClick()
+                    },
+                    onRegisterSaveAction = { currentSaveAction = it }
+                )
                 "Transfer" -> {
                     if (account?.type == AccountType.FOREX) {
                         CryptoTransferScreen(showHeader = false)
                     } else {
-                        TransferScreen(showHeader = false)
+                        TransferScreen(
+                            showHeader = false,
+                            fromAccount = account,
+                            allAccounts = uiState.accounts,
+                            onSave = { transaction ->
+                                viewModel.addTransaction(transaction)
+                                onBackClick()
+                            },
+                            onRegisterSaveAction = { currentSaveAction = it }
+                        )
                     }
                 }
-                "Adjust" -> AdjustBalanceScreen(showHeader = false)
+                "Adjust Balance" -> AdjustBalanceScreen(
+                    showHeader = false,
+                    account = account,
+                    onSave = { transaction ->
+                        viewModel.addTransaction(transaction)
+                        onBackClick()
+                    },
+                    onRegisterSaveAction = { currentSaveAction = it }
+                )
                 "Exchange" -> ExchangeScreen(showHeader = false)
-                "Buy" -> BuyScreen(showHeader = false)
-                "Sell" -> SellScreen(showHeader = false)
+                "Buy" -> BuyScreen(
+                    showHeader = false,
+                    account = account,
+                    onSave = { transaction ->
+                        viewModel.addTransaction(transaction)
+                        onBackClick()
+                    },
+                    onRegisterSaveAction = { currentSaveAction = it }
+                )
+                "Sell" -> SellScreen(
+                    showHeader = false,
+                    account = account,
+                    onSave = { transaction ->
+                        viewModel.addTransaction(transaction)
+                        onBackClick()
+                    },
+                    onRegisterSaveAction = { currentSaveAction = it }
+                )
             }
         }
     }
