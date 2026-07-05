@@ -35,7 +35,7 @@ fun ExchangeScreen(
     var isCleared by remember { mutableStateOf(true) }
 
     val saveAction = {
-        val amountValue = fromAmount.toDoubleOrNull() ?: 0.0
+        val amountValue = parseNumericInput(fromAmount)
         if (amountValue > 0 && account != null) {
             onSave(
                 Transaction(
@@ -43,8 +43,8 @@ fun ExchangeScreen(
                     type = TransactionType.EXCHANGE,
                     fromAccountId = account.id,
                     amount = amountValue,
-                    exchangeRate = exchangeRate.toDoubleOrNull(),
-                    commission = commission.toDoubleOrNull(),
+                    exchangeRate = parseNumericInput(exchangeRate),
+                    commission = parseNumericInput(commission),
                     description = description,
                     memo = memo,
                     status = if (isCleared) TransactionStatus.CLEARED else TransactionStatus.PENDING

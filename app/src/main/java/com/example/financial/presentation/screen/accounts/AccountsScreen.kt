@@ -3,7 +3,6 @@ package com.example.financial.presentation.screen.accounts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -53,7 +53,16 @@ fun AccountsScreen(
     // Helper to parse balance string to Double for sorting
     fun parseBalance(balance: String): Double {
         return try {
-            balance.replace(Regex("[^0-9.-]"), "").toDouble()
+            val normalized = balance.replace(",", ".")
+            val clean = normalized.replace(Regex("[^0-9.-]"), "")
+            val lastDotIndex = clean.lastIndexOf('.')
+            if (lastDotIndex != -1) {
+                val integerPart = clean.substring(0, lastDotIndex).replace(".", "")
+                val fractionalPart = clean.substring(lastDotIndex + 1)
+                (integerPart + "." + fractionalPart).toDouble()
+            } else {
+                clean.toDouble()
+            }
         } catch (e: Exception) {
             0.0
         }
@@ -85,17 +94,6 @@ fun AccountsScreen(
                 expandedGroupIds.add(group.id)
             }
         }
-    }
-
-    // Helper for transaction options
-    fun getTransactionOptions(type: AccountType): List<String> {
-        val options = mutableListOf("Expense", "Income", "Transfer", "Adjust Balance")
-        if (type == AccountType.FOREX) options.add("Exchange")
-        if (type == AccountType.INVESTMENT) {
-            options.add("Buy")
-            options.add("Sell")
-        }
-        return options
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -179,11 +177,13 @@ fun AccountsScreen(
                                 BalanceInfoItem(
                                     title = "Net Worth",
                                     amount = balance.netWorth,
+                                    color = Color(0xFF4CAF50),
                                     modifier = Modifier.weight(1f)
                                 )
                                 BalanceInfoItem(
                                     title = "Liabilities",
                                     amount = balance.liabilities,
+                                    color = Color(0xFFF44336),
                                     modifier = Modifier.weight(1f)
                                 )
                             }
@@ -249,7 +249,7 @@ fun AccountsScreen(
                         } else {
                             TextButton(onClick = { showReorderMenu = true }) {
                                 Icon(
-                                    imageVector = Icons.Default.Reorder,
+                                    imageVector = Icons.Default.Sort,
                                     contentDescription = "Reorder",
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -603,11 +603,22 @@ fun AccountsScreen(
 private fun BalanceInfoItem(
     title: String,
     amount: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified
 ) {
     Column(modifier = modifier) {
         Text(text = title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.height(6.dp))
-        Text(text = amount, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(text = amount, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = color)
     }
+}
+
+fun getTransactionOptions(type: AccountType): List<String> {
+    val options = mutableListOf("Expense", "Income", "Transfer", "Adjust Balance")
+    if (type == AccountType.FOREX) options.add("Exchange")
+    if (type == AccountType.INVESTMENT) {
+        options.add("Buy")
+        options.add("Sell")
+    }
+    return options
 }

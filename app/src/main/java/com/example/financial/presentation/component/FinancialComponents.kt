@@ -238,14 +238,14 @@ fun AccountItem(
                 text = account.balance,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = if (account.balance.startsWith("-")) Color(0xFFF44336) else MaterialTheme.colorScheme.onSurface
+                color = if (account.balance.contains("-")) Color(0xFFF44336) else Color(0xFF4CAF50)
             )
         }
     }
 }
 
 @Composable
-fun TransactionItem(transaction: Transaction) {
+fun TransactionItem(transaction: Transaction, currentAccountId: String? = null) {
     val icon = when (transaction.type) {
         TransactionType.EXPENSE -> Icons.Default.RemoveCircleOutline
         TransactionType.INCOME -> Icons.Default.AddCircleOutline
@@ -256,11 +256,27 @@ fun TransactionItem(transaction: Transaction) {
         TransactionType.SELL -> Icons.Default.ArrowCircleDown
     }
 
-    val isExpense = transaction.type == TransactionType.EXPENSE || 
-                    transaction.type == TransactionType.BUY || 
-                    transaction.type == TransactionType.TRANSFER
+    val isOutflow = when (transaction.type) {
+        TransactionType.EXPENSE, TransactionType.BUY -> true
+        TransactionType.INCOME, TransactionType.SELL -> false
+        TransactionType.TRANSFER -> {
+            if (currentAccountId != null) {
+                transaction.fromAccountId == currentAccountId
+            } else {
+                true
+            }
+        }
+        TransactionType.ADJUSTMENT -> transaction.amount < 0
+        else -> false
+    }
 
-    val color = if (isExpense) Color(0xFFF44336) else Color(0xFF4CAF50)
+    val isAdjustment = transaction.type == TransactionType.ADJUSTMENT
+
+    val color = when {
+        isAdjustment -> Color.Gray
+        isOutflow -> Color(0xFFF44336)
+        else -> Color(0xFF4CAF50)
+    }
 
     val dateStr = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
         .format(Date(transaction.date))
@@ -288,7 +304,7 @@ fun TransactionItem(transaction: Transaction) {
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = transaction.payee ?: transaction.description ?: "Transaction",
+                text = if (isAdjustment) "Balance Adjustment" else (transaction.payee ?: transaction.description ?: "Transaction"),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
@@ -318,7 +334,11 @@ fun TransactionItem(transaction: Transaction) {
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
-                text = (if (isExpense) "-" else "+") + String.format(Locale.getDefault(), "$%.2f", transaction.amount),
+                text = if (isAdjustment) {
+                    String.format(Locale.getDefault(), "$%.2f", transaction.amount)
+                } else {
+                    (if (isOutflow) "-" else "+") + String.format(Locale.getDefault(), "$%.2f", transaction.amount)
+                },
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
                 color = color

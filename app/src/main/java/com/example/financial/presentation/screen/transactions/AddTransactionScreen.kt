@@ -1,13 +1,14 @@
 package com.example.financial.presentation.screen.transactions
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.financial.domain.model.Account
 import com.example.financial.domain.model.AccountType
-import com.example.financial.presentation.component.TransactionTypeIcon
 import com.example.financial.presentation.screen.transactions.standard.*
 import com.example.financial.presentation.screen.transactions.crypto.*
 import com.example.financial.presentation.screen.transactions.investment.*
@@ -30,17 +30,21 @@ fun AddTransactionScreen(
     viewModel: com.example.financial.presentation.viewmodel.FinancialViewModel,
     account: Account?,
     initialType: String? = null,
+    isScheduled: Boolean = false,
     onBackClick: () -> Unit
 ) {
     val uiState by viewModel.homeUiState.collectAsState()
     
-    val tabs = remember(account?.type) {
-        val list = mutableListOf("Expense", "Income", "Transfer", "Adjust Balance")
-        if (account?.type == AccountType.FOREX) {
-            list.add("Exchange")
-        } else if (account?.type == AccountType.INVESTMENT) {
-            list.add("Buy")
-            list.add("Sell")
+    val tabs = remember(account?.type, isScheduled) {
+        val list = mutableListOf("Expense", "Income", "Transfer")
+        if (!isScheduled) {
+            if (account?.type == AccountType.FOREX) {
+                list.add("Exchange")
+            } else if (account?.type == AccountType.INVESTMENT) {
+                list.add("Buy")
+                list.add("Sell")
+            }
+            list.add("Adjust Balance")
         }
         list
     }
@@ -63,15 +67,12 @@ fun AddTransactionScreen(
             .fillMaxSize()
             .background(Color(0xFFF2F2F7))
             .statusBarsPadding()
-            .padding(horizontal = 12.dp)
     ) {
-        Spacer(modifier = Modifier.height(23.dp))
-
-        // --- TOP BAR (Unifying headers) ---
+        // --- TOP BAR ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -79,18 +80,19 @@ fun AddTransactionScreen(
             IconButton(
                 onClick = onBackClick,
                 modifier = Modifier
-                    .background(Color.White, RoundedCornerShape(50))
-                    .size(40.dp)
+                    .background(Color(0xFFE5E5EA), CircleShape)
+                    .size(36.dp)
             ) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Black)
+                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Black, modifier = Modifier.size(20.dp))
             }
 
-            // Tabs / Type Selector Icons
+            // Tab Selector Pill
             Row(
                 modifier = Modifier
                     .background(Color(0xFFE5E5EA), RoundedCornerShape(24.dp))
                     .padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 tabs.forEachIndexed { index, title ->
                     val icon = when (title) {
@@ -104,36 +106,45 @@ fun AddTransactionScreen(
                         else -> Icons.Outlined.QuestionMark
                     }
                     
-                    TransactionTypeIcon(
-                        icon = icon,
-                        isSelected = pagerState.currentPage == index,
-                        selectedColor = if (title == "Expense") Color.Red else Color.Black,
-                        onClick = {
-                            scope.launch { pagerState.animateScrollToPage(index) }
-                        }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                if (pagerState.currentPage == index) Color.White else Color.Transparent,
+                                CircleShape
+                            )
+                            .clickable {
+                                scope.launch { pagerState.animateScrollToPage(index) }
+                            }
+                            .padding(6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = title,
+                            tint = if (pagerState.currentPage == index) Color.Black else Color.Gray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
-            // Unified Save Button
+            // Save Button
             Button(
                 onClick = { currentSaveAction?.invoke() },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
                 shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 24.dp),
-                modifier = Modifier.height(40.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                modifier = Modifier.height(36.dp),
                 enabled = currentSaveAction != null
             ) {
-                Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
+                Text("Save", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Title (Dynamic)
+        // Title
         Text(
             text = tabs[pagerState.currentPage],
-            fontSize = 24.sp,
+            fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.align(Alignment.CenterHorizontally),
             color = Color.Black
@@ -147,10 +158,10 @@ fun AddTransactionScreen(
                 .fillMaxWidth()
                 .weight(1f),
             userScrollEnabled = true,
-            contentPadding = PaddingValues(bottom = 16.dp),
             verticalAlignment = Alignment.Top
         ) { page ->
-            when (tabs[page]) {
+            val screenType = tabs[page]
+            when (screenType) {
                 "Expense" -> ExpenseScreen(
                     showHeader = false, 
                     account = account,
@@ -170,20 +181,16 @@ fun AddTransactionScreen(
                     onRegisterSaveAction = { currentSaveAction = it }
                 )
                 "Transfer" -> {
-                    if (account?.type == AccountType.FOREX) {
-                        CryptoTransferScreen(showHeader = false)
-                    } else {
-                        TransferScreen(
-                            showHeader = false,
-                            fromAccount = account,
-                            allAccounts = uiState.accounts,
-                            onSave = { transaction ->
-                                viewModel.addTransaction(transaction)
-                                onBackClick()
-                            },
-                            onRegisterSaveAction = { currentSaveAction = it }
-                        )
-                    }
+                    TransferScreen(
+                        showHeader = false,
+                        fromAccount = account,
+                        allAccounts = uiState.accounts,
+                        onSave = { transaction ->
+                            viewModel.addTransaction(transaction)
+                            onBackClick()
+                        },
+                        onRegisterSaveAction = { currentSaveAction = it }
+                    )
                 }
                 "Adjust Balance" -> AdjustBalanceScreen(
                     showHeader = false,

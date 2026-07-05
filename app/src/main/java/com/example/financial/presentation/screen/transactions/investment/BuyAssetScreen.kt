@@ -33,7 +33,10 @@ fun BuyScreen(
     var isCleared by remember { mutableStateOf(true) }
 
     val saveAction = {
-        val totalAmount = (shares.toDoubleOrNull() ?: 0.0) * (pricePerShare.toDoubleOrNull() ?: 0.0) + (commission.toDoubleOrNull() ?: 0.0)
+        val s = parseNumericInput(shares)
+        val p = parseNumericInput(pricePerShare)
+        val c = parseNumericInput(commission)
+        val totalAmount = (s * p) + c
         if (totalAmount > 0 && account != null) {
             onSave(
                 Transaction(
@@ -42,9 +45,9 @@ fun BuyScreen(
                     fromAccountId = account.id,
                     amount = totalAmount,
                     symbol = symbol,
-                    shares = shares.toDoubleOrNull(),
-                    pricePerShare = pricePerShare.toDoubleOrNull(),
-                    commission = commission.toDoubleOrNull(),
+                    shares = s,
+                    pricePerShare = p,
+                    commission = c,
                     memo = memo,
                     status = if (isCleared) TransactionStatus.CLEARED else TransactionStatus.PENDING
                 )

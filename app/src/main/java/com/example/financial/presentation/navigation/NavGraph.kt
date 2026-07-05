@@ -137,7 +137,8 @@ fun NavGraph(navController: NavHostController) {
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
                 },
                 groups = uiState.accountGroups,
-                budgets = uiState.budgets
+                budgets = uiState.budgets,
+                accounts = uiState.accounts
             )
         }
 
@@ -180,6 +181,9 @@ fun NavGraph(navController: NavHostController) {
                 AccountDetailScreen(
                     account = account,
                     groupName = uiState.accountGroups.find { it.id == account.groupId }?.name,
+                    transactions = uiState.transactions.filter { 
+                        it.fromAccountId == account.id || it.toAccountId == account.id 
+                    },
                     onBackClick = { navController.popBackStack() },
                     onDeleteClick = {
                         viewModel.deleteAccount(it)
@@ -196,11 +200,13 @@ fun NavGraph(navController: NavHostController) {
             route = Screen.AddTransaction.route,
             arguments = listOf(
                 navArgument("accountId") { type = NavType.StringType },
-                navArgument("type") { type = NavType.StringType; nullable = true }
+                navArgument("type") { type = NavType.StringType; nullable = true },
+                navArgument("isScheduled") { type = NavType.BoolType; defaultValue = false }
             )
         ) { backStackEntry ->
             val accountId = backStackEntry.arguments?.getString("accountId")
             val type = backStackEntry.arguments?.getString("type")
+            val isScheduled = backStackEntry.arguments?.getBoolean("isScheduled") ?: false
             val uiState by viewModel.homeUiState.collectAsState()
             val account = uiState.accounts.find { it.id == accountId }
 
@@ -208,6 +214,7 @@ fun NavGraph(navController: NavHostController) {
                 viewModel = viewModel,
                 account = account,
                 initialType = type,
+                isScheduled = isScheduled,
                 onBackClick = { navController.popBackStack() }
             )
         }
@@ -230,7 +237,7 @@ fun NavGraph(navController: NavHostController) {
 
         composable(Screen.AddExpenseBudget.route) {
             val uiState by viewModel.homeUiState.collectAsState()
-            CreateExpenseBudgetsScreen(
+            CreateExpenseBudgetScreen(
                 onCloseClick = { navController.popBackStack() },
                 onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover ->
                     viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover)
@@ -262,7 +269,14 @@ fun NavGraph(navController: NavHostController) {
             )
         }
         composable(Screen.Scheduled.route) {
-            ScheduledScreen(viewModel = viewModel)
+            val uiState by viewModel.homeUiState.collectAsState()
+            ScheduledScreen(
+                viewModel = viewModel,
+                onAddClick = {
+                    val defaultAccountId = uiState.accounts.firstOrNull()?.id ?: "none"
+                    navController.navigate("add_transaction/$defaultAccountId/Expense?isScheduled=true")
+                }
+            )
         }
         composable(Screen.Reports.route) {
             ReportsScreen(viewModel = viewModel)

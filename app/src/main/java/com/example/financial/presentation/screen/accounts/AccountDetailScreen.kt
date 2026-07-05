@@ -18,12 +18,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.financial.domain.model.Account
 import com.example.financial.domain.model.AccountType
+import com.example.financial.domain.model.Transaction
+import com.example.financial.presentation.component.TransactionItem
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountDetailScreen(
     account: Account,
     groupName: String?,
+    transactions: List<Transaction> = emptyList(),
     onBackClick: () -> Unit,
     onDeleteClick: (Account) -> Unit,
     onNavigateToTransaction: (type: String) -> Unit
@@ -105,6 +108,38 @@ fun AccountDetailScreen(
                         DetailDivider()
                         DetailItem(Icons.AutoMirrored.Filled.Notes, "Notes", account.additionalInfo)
                     }
+                }
+            }
+
+            // History Section
+            if (transactions.isNotEmpty()) {
+                Text(
+                    "Transaction History", 
+                    style = MaterialTheme.typography.titleMedium, 
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        transactions.sortedByDescending { it.date }.forEachIndexed { index, transaction ->
+                            TransactionItem(transaction = transaction, currentAccountId = account.id)
+                            if (index < transactions.size - 1) {
+                                HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.3f))
+                            }
+                        }
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("No transactions yet", color = Color.Gray)
                 }
             }
         }

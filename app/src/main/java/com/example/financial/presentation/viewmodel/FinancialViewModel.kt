@@ -394,7 +394,23 @@ class FinancialViewModel(
 
     private fun parseBalance(balance: String): Double {
         return try {
-            balance.replace(Regex("[^0-9.-]"), "").toDouble()
+            // Normalize separators: handle both dots and commas. 
+            // If both exist, the last one is likely the decimal separator.
+            // For simple case like "5,00" or "5.00", we convert comma to dot.
+            val normalized = balance.replace(",", ".")
+            // Remove everything except digits, dots and minus sign
+            // If there are multiple dots, keep only the last one as decimal
+            val regex = Regex("[^0-9.-]")
+            val clean = normalized.replace(regex, "")
+            
+            val lastDotIndex = clean.lastIndexOf('.')
+            if (lastDotIndex != -1) {
+                val integerPart = clean.substring(0, lastDotIndex).replace(".", "")
+                val fractionalPart = clean.substring(lastDotIndex + 1)
+                (integerPart + "." + fractionalPart).toDouble()
+            } else {
+                clean.toDouble()
+            }
         } catch (e: Exception) {
             0.0
         }

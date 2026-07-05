@@ -53,19 +53,42 @@ class FinancialRepository(
             var totalBalance = 0.0
             var liabilities = 0.0
             accounts.forEach { account ->
-                val b = try { account.balance.replace(Regex("[^0-9.-]"), "").toDouble() } catch(e:Exception) { 0.0 }
+                val b = parseBalance(account.balance)
                 if (b < 0) liabilities += kotlin.math.abs(b)
                 totalBalance += b
             }
             
             BalanceData(
-                netWorth = String.format(java.util.Locale.getDefault(), "$%.2f", totalBalance),
-                liabilities = String.format(java.util.Locale.getDefault(), "$%.2f", liabilities),
+                netWorth = formatBalance(totalBalance),
+                liabilities = formatBalance(-liabilities),
                 totalIncome = "$0.00", // Calculate from transactions
                 totalExpenses = "$0.00", // Calculate from transactions
                 monthlyBudget = 0.5f
             )
         }.collect { emit(it) }
+    }
+
+    private fun parseBalance(balance: String): Double {
+        return try {
+            val normalized = balance.replace(",", ".")
+            val clean = normalized.replace(Regex("[^0-9.-]"), "")
+            val lastDotIndex = clean.lastIndexOf('.')
+            if (lastDotIndex != -1) {
+                val integerPart = clean.substring(0, lastDotIndex).replace(".", "")
+                val fractionalPart = clean.substring(lastDotIndex + 1)
+                (integerPart + "." + fractionalPart).toDouble()
+            } else {
+                clean.toDouble()
+            }
+        } catch (e: Exception) {
+            0.0
+        }
+    }
+
+    private fun formatBalance(balance: Double): String {
+        return java.util.Locale.getDefault().let { locale ->
+            String.format(locale, "$%.2f", balance)
+        }
     }
 
     fun getCategorySpending(): Flow<List<CategorySpending>> = flowOf(emptyList())

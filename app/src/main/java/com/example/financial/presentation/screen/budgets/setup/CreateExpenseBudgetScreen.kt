@@ -23,7 +23,7 @@ import com.example.financial.domain.model.BudgetGroup
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateExpenseBudgetsScreen(
+fun CreateExpenseBudgetScreen(
     onCloseClick: () -> Unit,
     onSaveClick: (
         name: String,

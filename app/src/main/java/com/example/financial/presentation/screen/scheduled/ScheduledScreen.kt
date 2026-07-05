@@ -18,15 +18,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScheduledScreen(
-    viewModel: FinancialViewModel
+    viewModel: FinancialViewModel,
+    onAddClick: () -> Unit = {}
 ) {
     val uiState by viewModel.homeUiState.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedRange by remember { mutableStateOf("This Month") }
     var showRangeMenu by remember { mutableStateOf(false) }
+
+    val datePickerState = rememberDatePickerState(
+        initialSelectedDateMillis = System.currentTimeMillis()
+    )
 
     val ranges = listOf(
         "This Week",
@@ -59,7 +65,7 @@ fun ScheduledScreen(
                     fontWeight = FontWeight.Bold
                 )
 
-                IconButton(onClick = { /* TODO: handle add later */ }) {
+                IconButton(onClick = onAddClick) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = "Add Scheduled"
@@ -80,6 +86,26 @@ fun ScheduledScreen(
                 singleLine = true,
                 shape = RoundedCornerShape(50.dp)
             )
+        }
+
+        item {
+            // Calendar View
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
+                )
+            ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                    DatePicker(
+                        state = datePickerState,
+                        showModeToggle = false,
+                        title = null,
+                        headline = null
+                    )
+                }
+            }
         }
 
         item {
@@ -151,44 +177,6 @@ fun ScheduledScreen(
                         amount = "$0",
                         modifier = Modifier.weight(1f)
                     )
-                }
-            }
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(2.dp)
-                )
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CalendarMonth,
-                        contentDescription = null
-                    )
-
-                    Spacer(modifier = Modifier.width(12.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Phone Calendar",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            text = "Sync scheduled bills from phone calendar",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
         }
