@@ -7,6 +7,7 @@ import com.example.financial.domain.model.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.*
+import java.util.Calendar
 
 class FinancialRepository(
     private val transactionDao: TransactionDao,
@@ -35,8 +36,63 @@ class FinancialRepository(
         }
 
     fun getBudgets(): Flow<List<Budget>> = 
-        budgetDao.getAllBudgets().map { entities ->
-            entities.map { it.toDomain() }
+        combine(
+            budgetDao.getAllBudgets(),
+            getTransactions()
+        ) { entities, transactions ->
+            entities.map { entity ->
+                val budget = entity.toDomain()
+                
+                // Filter transactions based on budget configuration
+                val relevantTransactions = transactions.filter { transaction ->
+                    val typeMatch = transaction.type == (if (budget.isIncome) TransactionType.INCOME else TransactionType.EXPENSE)
+                    val accountMatch = budget.accountIds.isEmpty() || budget.accountIds.contains(transaction.fromAccountId)
+                    val categoryMatch = budget.categories.isEmpty() || budget.categories.any { it.equals(transaction.payee, ignoreCase = true) || it.equals(transaction.description, ignoreCase = true) }
+                    
+                    typeMatch && accountMatch && categoryMatch
+                }
+
+                // Current Period Calculation
+                val now = System.currentTimeMillis()
+                val calendar = Calendar.getInstance()
+                calendar.timeInMillis = budget.startDate
+                
+                // Determine duration of a period in millis
+                val periodMillis: Long = when (budget.frequencyUnit.lowercase()) {
+                    "day" -> 24L * 60 * 60 * 1000
+                    "week" -> 7L * 24 * 60 * 60 * 1000
+                    "month" -> 30L * 24 * 60 * 60 * 1000 // Approximate
+                    "year" -> 365L * 24 * 60 * 60 * 1000 // Approximate
+                    else -> 30L * 24 * 60 * 60 * 1000
+                }
+
+                val timePassed = now - budget.startDate
+                val periodsPassed = if (timePassed > 0) (timePassed / periodMillis).toInt() else 0
+                val currentPeriodStart = budget.startDate + (periodsPassed * periodMillis)
+                
+                val spentInCurrentPeriod = relevantTransactions
+                    .filter { it.date >= currentPeriodStart }
+                    .sumOf { it.amount }
+                
+                // Rollover Logic: Total balance from all past periods
+                var rolloverAmount = 0.0
+                if (budget.rolloverEnabled && !budget.isIncome && periodsPassed > 0) {
+                    val pastTransactionsSpent = relevantTransactions
+                        .filter { it.date >= budget.startDate && it.date < currentPeriodStart }
+                        .sumOf { it.amount }
+                    val totalBudgetedPast = budget.amount * periodsPassed
+                    rolloverAmount = totalBudgetedPast - pastTransactionsSpent
+                }
+
+                val remaining = budget.amount - spentInCurrentPeriod + rolloverAmount
+                val progress = if (budget.amount > 0) (spentInCurrentPeriod / budget.amount).toFloat() else 0f
+                
+                budget.copy(
+                    spent = spentInCurrentPeriod,
+                    remaining = remaining,
+                    progress = progress.coerceIn(0f, 1f)
+                )
+            }
         }
 
     fun getBudgetGroups(): Flow<List<BudgetGroup>> =
@@ -47,9 +103,9 @@ class FinancialRepository(
     fun getBalanceData(): Flow<BalanceData> = flow {
         combine(
             getAccounts(),
-            getTransactions()
-        ) { accounts, transactions ->
-            // Simple calculation for net worth
+            getTransactions(),
+            getBudgets()
+        ) { accounts, transactions, budgets ->
             var totalBalance = 0.0
             var liabilities = 0.0
             accounts.forEach { account ->
@@ -58,12 +114,24 @@ class FinancialRepository(
                 totalBalance += b
             }
             
+            val totalIncome = transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+            val totalExpenses = transactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+
+            // Calculate overall monthly budget progress
+            val expenseBudgets = budgets.filter { !it.isIncome }
+            val totalBudgetAmount = expenseBudgets.sumOf { it.amount }
+            val totalBudgetSpent = expenseBudgets.sumOf { it.spent }
+            
+            val budgetProgress = if (totalBudgetAmount > 0) 
+                (totalBudgetSpent / totalBudgetAmount).toFloat().coerceIn(0f, 1f)
+            else 0f
+
             BalanceData(
                 netWorth = formatBalance(totalBalance),
                 liabilities = formatBalance(-liabilities),
-                totalIncome = "$0.00", // Calculate from transactions
-                totalExpenses = "$0.00", // Calculate from transactions
-                monthlyBudget = 0.5f
+                totalIncome = formatBalance(totalIncome),
+                totalExpenses = formatBalance(totalExpenses),
+                monthlyBudget = budgetProgress
             )
         }.collect { emit(it) }
     }

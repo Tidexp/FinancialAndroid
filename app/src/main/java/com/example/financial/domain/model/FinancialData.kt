@@ -78,6 +78,8 @@ data class Budget(
     val frequencyValue: Int = 1,
     val frequencyUnit: String = "month",
     val rolloverEnabled: Boolean = false,
+    val accountIds: List<String> = emptyList(),
+    val categories: List<String> = emptyList(),
     val spent: Double = 0.0,
     val remaining: Double = 0.0,
     val progress: Float = 0f

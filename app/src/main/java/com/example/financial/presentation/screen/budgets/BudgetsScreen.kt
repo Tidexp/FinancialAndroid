@@ -33,9 +33,15 @@ fun BudgetsScreen(
 
     var searchQuery by remember { mutableStateOf("") }
     var showAddMenu by remember { mutableStateOf(false) }
+    var sortByName by remember { mutableStateOf(true) }
 
-    val filteredBudgets = uiState.budgets.filter { budget ->
-        budget.name.contains(searchQuery, ignoreCase = true)
+    val filteredBudgets = remember(uiState.budgets, searchQuery, sortByName) {
+        uiState.budgets.filter { budget ->
+            budget.name.contains(searchQuery, ignoreCase = true)
+        }.let { 
+            if (sortByName) it.sortedBy { b -> b.name } 
+            else it.sortedByDescending { b -> b.amount }
+        }
     }
 
     LazyColumn(
@@ -155,14 +161,14 @@ fun BudgetsScreen(
                     fontWeight = FontWeight.ExtraBold
                 )
 
-                TextButton(onClick = { /* TODO: sort budgets */ }) {
+                TextButton(onClick = { sortByName = !sortByName }) {
                     Icon(
                         imageVector = Icons.Default.Sort,
                         contentDescription = "Sort",
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Sort")
+                    Text(if (sortByName) "Sort by Name" else "Sort by Amount")
                 }
             }
         }

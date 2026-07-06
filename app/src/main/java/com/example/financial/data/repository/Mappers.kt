@@ -137,7 +137,9 @@ fun BudgetEntity.toDomain(): com.example.financial.domain.model.Budget {
         repeatEnabled = repeatEnabled,
         frequencyValue = frequencyValue,
         frequencyUnit = frequencyUnit,
-        rolloverEnabled = rolloverEnabled
+        rolloverEnabled = rolloverEnabled,
+        accountIds = accountIds,
+        categories = categories
     )
 }
 
@@ -153,7 +155,9 @@ fun com.example.financial.domain.model.Budget.toEntity(): BudgetEntity {
         repeatEnabled = repeatEnabled,
         frequencyValue = frequencyValue,
         frequencyUnit = frequencyUnit,
-        rolloverEnabled = rolloverEnabled
+        rolloverEnabled = rolloverEnabled,
+        accountIds = accountIds,
+        categories = categories
     )
 }
 

@@ -3,23 +3,34 @@ package com.example.financial.presentation.screen.budgets.setup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.financial.domain.model.Account
 import com.example.financial.domain.model.BudgetGroup
+import com.example.financial.presentation.component.ExpenseItem
+import com.example.financial.presentation.component.TransactionDivider
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,9 +46,12 @@ fun CreateExpenseBudgetScreen(
         repeatEnabled: Boolean,
         frequencyValue: Int,
         frequencyUnit: String,
-        rolloverEnabled: Boolean
+        rolloverEnabled: Boolean,
+        accountIds: List<String>,
+        categories: List<String>
     ) -> Unit,
-    budgetGroups: List<BudgetGroup> = emptyList()
+    budgetGroups: List<BudgetGroup> = emptyList(),
+    accounts: List<Account> = emptyList()
 ) {
     // --- States ---
     var budgetName by remember { mutableStateOf("") }
@@ -46,12 +60,22 @@ fun CreateExpenseBudgetScreen(
     var selectedGroupId by remember { mutableStateOf<String?>(null) }
     var showGroupPicker by remember { mutableStateOf(false) }
     var startDate by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    val datePickerState = rememberDatePickerState(initialSelectedDateMillis = startDate)
+
+    val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
 
     var repeatEnabled by remember { mutableStateOf(true) }
-    var frequencyValue by remember { mutableStateOf("1") }
     var frequencyUnit by remember { mutableStateOf("month") }
+    var showFrequencyPicker by remember { mutableStateOf(false) }
 
     var rolloverEnabled by remember { mutableStateOf(false) }
+
+    val selectedAccountIds = remember { mutableStateListOf<String>() }
+    var showAccountPicker by remember { mutableStateOf(false) }
+
+    val categoryList = remember { mutableStateListOf<String>() }
+    var categoryInput by remember { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -80,9 +104,11 @@ fun CreateExpenseBudgetScreen(
                                     selectedGroupId,
                                     startDate,
                                     repeatEnabled,
-                                    frequencyValue.toIntOrNull() ?: 1,
+                                    1, // Fixed at 1 as per request
                                     frequencyUnit,
-                                    rolloverEnabled
+                                    rolloverEnabled,
+                                    selectedAccountIds.toList(),
+                                    categoryList.toList()
                                 )
                             }
                         },
@@ -116,6 +142,7 @@ fun CreateExpenseBudgetScreen(
                             value = amountText,
                             onValueChange = { amountText = it },
                             placeholder = { Text("0.00") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
@@ -143,23 +170,81 @@ fun CreateExpenseBudgetScreen(
                         }
                     }
                 )
-                
-                BudgetDivider()
-                BudgetClickableRow(Icons.Default.Edit, "Icon", "")
             }
 
             BudgetSectionHeader("Which transactions should be included?")
             BudgetCard {
-                BudgetClickableRow(Icons.Default.AccountBalanceWallet, "All Accounts", "")
+                ListItem(
+                    modifier = Modifier.clickable { showAccountPicker = true },
+                    leadingContent = { Icon(Icons.Default.AccountBalanceWallet, null, tint = Color.Gray) },
+                    headlineContent = { Text("Accounts") },
+                    trailingContent = {
+                        val text = if (selectedAccountIds.isEmpty()) "All" else "${selectedAccountIds.size} selected"
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(text, color = Color.Gray)
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
+                        }
+                    }
+                )
                 BudgetDivider()
-                BudgetClickableRow(Icons.Outlined.Folder, "All Categories", "")
-                BudgetDivider()
-                BudgetClickableRow(Icons.Outlined.Label, "All Tags", "")
+                
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Outlined.Folder, null, tint = Color.Gray)
+                        Spacer(modifier = Modifier.width(16.dp))
+                        TextField(
+                            value = categoryInput,
+                            onValueChange = { categoryInput = it },
+                            placeholder = { Text("Add Category") },
+                            modifier = Modifier.weight(1f),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = {
+                                if (categoryInput.isNotBlank() && !categoryList.contains(categoryInput)) {
+                                    categoryList.add(categoryInput.trim())
+                                    categoryInput = ""
+                                }
+                            }),
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                        IconButton(onClick = {
+                            if (categoryInput.isNotBlank() && !categoryList.contains(categoryInput)) {
+                                categoryList.add(categoryInput.trim())
+                                categoryInput = ""
+                            }
+                        }) {
+                            Icon(Icons.Default.Add, null, tint = Color(0xFF2196F3))
+                        }
+                    }
+                    
+                    if (categoryList.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            categoryList.forEach { category ->
+                                InputChip(
+                                    selected = true,
+                                    onClick = { categoryList.remove(category) },
+                                    label = { Text(category) },
+                                    trailingIcon = { Icon(Icons.Default.Close, null, modifier = Modifier.size(16.dp)) }
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             BudgetSectionHeader("Configure how the budget repeats")
             BudgetCard {
                 ListItem(
+                    modifier = Modifier.clickable { showDatePicker = true },
                     leadingContent = { Icon(Icons.Default.CalendarToday, null, tint = Color.Gray) },
                     headlineContent = {
                         Surface(
@@ -167,7 +252,7 @@ fun CreateExpenseBudgetScreen(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Text(
-                                "Today",
+                                dateFormatter.format(Date(startDate)),
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 14.sp
@@ -190,16 +275,12 @@ fun CreateExpenseBudgetScreen(
                 if (repeatEnabled) {
                     BudgetDivider()
                     ListItem(
+                        modifier = Modifier.clickable { showFrequencyPicker = true },
                         headlineContent = { Text("Frequency") },
                         trailingContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    frequencyValue,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
-                                Text(
-                                    frequencyUnit,
+                                    "Every 1 ${frequencyUnit.lowercase()}",
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
@@ -270,72 +351,82 @@ fun CreateExpenseBudgetScreen(
                 }
             }
         }
-    }
-}
 
-@Composable
-fun BudgetSectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.Bold,
-        color = Color.Black,
-        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp)
-    )
-}
-
-@Composable
-fun BudgetCard(content: @Composable ColumnScope.() -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(0.dp),
-        content = content
-    )
-}
-
-@Composable
-fun BudgetInputRow(icon: androidx.compose.ui.graphics.vector.ImageVector, placeholder: String, value: String, onValueChange: (String) -> Unit) {
-    ListItem(
-        leadingContent = { Icon(icon, null, tint = Color.Gray) },
-        headlineContent = {
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                placeholder = { Text(placeholder) },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-    )
-}
-
-@Composable
-fun BudgetClickableRow(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, secondaryValue: String) {
-    ListItem(
-        modifier = Modifier.clickable { },
-        leadingContent = { Icon(icon, null, tint = Color.Gray) },
-        headlineContent = { Text(label, color = if (secondaryValue.isEmpty()) Color.Gray else Color.Black) },
-        trailingContent = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (secondaryValue.isNotEmpty()) {
-                    Text(secondaryValue, color = Color.Gray, modifier = Modifier.padding(end = 8.dp))
+        if (showAccountPicker) {
+            ModalBottomSheet(onDismissRequest = { showAccountPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Accounts", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                        items(accounts) { account ->
+                            val isSelected = selectedAccountIds.contains(account.id)
+                            ListItem(
+                                modifier = Modifier.clickable {
+                                    if (isSelected) selectedAccountIds.remove(account.id)
+                                    else selectedAccountIds.add(account.id)
+                                },
+                                leadingContent = {
+                                    Checkbox(checked = isSelected, onCheckedChange = null)
+                                },
+                                headlineContent = { Text(account.name) },
+                                trailingContent = {
+                                    Box(modifier = Modifier.size(24.dp).background(account.color, CircleShape))
+                                }
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = { showAccountPicker = false },
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text("Done")
+                    }
                 }
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray)
             }
         }
-    )
-}
 
-@Composable
-fun BudgetDivider() {
-    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
+        if (showFrequencyPicker) {
+            val units = listOf("Day", "Week", "Month", "Year")
+            ModalBottomSheet(onDismissRequest = { showFrequencyPicker = false }) {
+                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                    Text("Select Frequency", style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    units.forEach { unit ->
+                        ListItem(
+                            modifier = Modifier.clickable {
+                                frequencyUnit = unit.lowercase()
+                                showFrequencyPicker = false
+                            },
+                            headlineContent = { Text("Every 1 $unit") },
+                            trailingContent = {
+                                if (frequencyUnit == unit.lowercase()) {
+                                    Icon(Icons.Default.Check, null, tint = Color(0xFF2196F3))
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showDatePicker) {
+            DatePickerDialog(
+                onDismissRequest = { showDatePicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        datePickerState.selectedDateMillis?.let {
+                            startDate = it
+                        }
+                        showDatePicker = false
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                }
+            ) {
+                DatePicker(state = datePickerState)
+            }
+        }
+    }
 }

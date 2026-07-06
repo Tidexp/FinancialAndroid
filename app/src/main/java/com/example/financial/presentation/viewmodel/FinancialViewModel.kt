@@ -152,7 +152,9 @@ class FinancialViewModel(
         repeatEnabled: Boolean = true,
         frequencyValue: Int = 1,
         frequencyUnit: String = "month",
-        rolloverEnabled: Boolean = false
+        rolloverEnabled: Boolean = false,
+        accountIds: List<String> = emptyList(),
+        categories: List<String> = emptyList()
     ) {
         viewModelScope.launch {
             val budget = Budget(
@@ -166,7 +168,9 @@ class FinancialViewModel(
                 repeatEnabled = repeatEnabled,
                 frequencyValue = frequencyValue,
                 frequencyUnit = frequencyUnit,
-                rolloverEnabled = rolloverEnabled
+                rolloverEnabled = rolloverEnabled,
+                accountIds = accountIds,
+                categories = categories
             )
             repository.addBudget(budget)
         }
@@ -457,6 +461,10 @@ class FinancialViewModel(
         budgetGroups: List<BudgetGroup>,
         transactions: List<Transaction>
     ): (HomeUiState) -> HomeUiState = { currentState ->
+        val totalBudgeted = budgets.filter { !it.isIncome }.sumOf { it.amount }
+        val totalSpent = budgets.filter { !it.isIncome }.sumOf { it.spent }
+        val remainingBudget = totalBudgeted - totalSpent
+
         currentState.copy(
             balanceData = balance,
             accounts = accounts,
@@ -464,6 +472,8 @@ class FinancialViewModel(
             budgets = budgets,
             budgetGroups = budgetGroups,
             transactions = transactions,
+            totalBudgeted = formatBalance(totalBudgeted),
+            remainingBudget = formatBalance(remainingBudget),
             isLoading = false
         )
     }

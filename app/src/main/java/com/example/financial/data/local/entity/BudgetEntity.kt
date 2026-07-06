@@ -16,6 +16,8 @@ data class BudgetEntity(
     val frequencyValue: Int = 1,
     val frequencyUnit: String = "month",
     val rolloverEnabled: Boolean = false,
+    val accountIds: List<String> = emptyList(),
+    val categories: List<String> = emptyList(),
     val lastUpdated: Long = System.currentTimeMillis()
 )
 

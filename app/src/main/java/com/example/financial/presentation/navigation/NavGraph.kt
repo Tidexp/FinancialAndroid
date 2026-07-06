@@ -239,11 +239,12 @@ fun NavGraph(navController: NavHostController) {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateExpenseBudgetScreen(
                 onCloseClick = { navController.popBackStack() },
-                onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover ->
-                    viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover)
+                onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover, accountIds, categories ->
+                    viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover, accountIds, categories)
                     navController.popBackStack()
                 },
-                budgetGroups = uiState.budgetGroups
+                budgetGroups = uiState.budgetGroups,
+                accounts = uiState.accounts
             )
         }
 
@@ -251,11 +252,12 @@ fun NavGraph(navController: NavHostController) {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateIncomeBudgetScreen(
                 onCloseClick = { navController.popBackStack() },
-                onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover ->
-                    viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover)
+                onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover, accountIds, categories ->
+                    viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover, accountIds, categories)
                     navController.popBackStack()
                 },
-                budgetGroups = uiState.budgetGroups
+                budgetGroups = uiState.budgetGroups,
+                accounts = uiState.accounts
             )
         }
 
