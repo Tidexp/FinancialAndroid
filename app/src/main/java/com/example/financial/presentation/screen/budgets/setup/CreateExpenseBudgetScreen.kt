@@ -54,11 +54,12 @@ fun CreateExpenseBudgetScreen(
     ) -> Unit,
     budgetGroups: List<BudgetGroup> = emptyList(),
     accounts: List<Account> = emptyList(),
-    showHeader: Boolean = true
+    showHeader: Boolean = true,
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
 ) {
     // --- States ---
     var budgetName by remember { mutableStateOf(initialBudget?.name ?: "") }
-    var amountText by remember { mutableStateOf(String.format(Locale.getDefault(), "%.2f", initialBudget?.amount ?: 0.0)) }
+    var amountText by remember { mutableStateOf(if (initialBudget != null) String.format(Locale.getDefault(), "%.2f", initialBudget.amount) else "") }
     var selectedColor by remember { mutableStateOf(initialBudget?.color ?: Color(0xFFF44336)) }
     var selectedGroupId by remember { mutableStateOf<String?>(initialBudget?.budgetGroupId) }
     var showGroupPicker by remember { mutableStateOf(false) }
@@ -87,6 +88,29 @@ fun CreateExpenseBudgetScreen(
         list
     }
     var categoryInput by remember { mutableStateOf("") }
+
+    val saveAction = {
+        if (budgetName.isNotBlank()) {
+            onSaveClick(
+                budgetName,
+                amountText.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                false,
+                selectedColor,
+                selectedGroupId,
+                startDate,
+                repeatEnabled,
+                1,
+                frequencyUnit,
+                rolloverEnabled,
+                selectedAccountIds.toList(),
+                categoryList.toList()
+            )
+        }
+    }
+
+    LaunchedEffect(budgetName, amountText, selectedColor, selectedGroupId, startDate, repeatEnabled, frequencyUnit, rolloverEnabled, selectedAccountIds, categoryList) {
+        onRegisterSaveAction(saveAction)
+    }
 
     val content = @Composable { padding: PaddingValues ->
         Column(
@@ -340,24 +364,7 @@ fun CreateExpenseBudgetScreen(
                     },
                     actions = {
                         Button(
-                            onClick = {
-                                if (budgetName.isNotBlank()) {
-                                    onSaveClick(
-                                        budgetName,
-                                        amountText.replace(",", ".").toDoubleOrNull() ?: 0.0,
-                                        false,
-                                        selectedColor,
-                                        selectedGroupId,
-                                        startDate,
-                                        repeatEnabled,
-                                        1, // Fixed at 1 as per request
-                                        frequencyUnit,
-                                        rolloverEnabled,
-                                        selectedAccountIds.toList(),
-                                        categoryList.toList()
-                                    )
-                                }
-                            },
+                            onClick = saveAction,
                             shape = RoundedCornerShape(50),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2196F3)),
                             contentPadding = PaddingValues(horizontal = 24.dp)

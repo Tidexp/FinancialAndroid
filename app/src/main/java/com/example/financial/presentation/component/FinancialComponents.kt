@@ -251,8 +251,12 @@ fun TransactionItem(
     transaction: Transaction,
     currentAccountId: String? = null,
     onLongClick: (() -> Unit)? = null,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    strikethrough: Boolean = false
 ) {
+    val textDecoration = if (strikethrough) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+    val contentAlpha = if (strikethrough) 0.5f else 1f
+
     val icon = when (transaction.type) {
         TransactionType.EXPENSE -> Icons.Default.RemoveCircleOutline
         TransactionType.INCOME -> Icons.Default.AddCircleOutline
@@ -322,16 +326,17 @@ fun TransactionItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = if (isAdjustment) "Balance Adjustment" else (transaction.payee ?: transaction.description ?: "Transaction"),
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.copy(textDecoration = textDecoration),
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = transaction.type.name.lowercase().replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.bodySmall.copy(textDecoration = textDecoration),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
                 )
                 if (transaction.memo?.isNotBlank() == true) {
                     Text(
@@ -356,14 +361,14 @@ fun TransactionItem(
                 } else {
                     (if (isOutflow) "-" else "+") + String.format(Locale.getDefault(), "$%.2f", transaction.amount)
                 },
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyLarge.copy(textDecoration = textDecoration),
                 fontWeight = FontWeight.Bold,
-                color = color
+                color = color.copy(alpha = contentAlpha)
             )
             Text(
                 text = dateStr,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.labelSmall.copy(textDecoration = textDecoration),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
             )
         }
     }

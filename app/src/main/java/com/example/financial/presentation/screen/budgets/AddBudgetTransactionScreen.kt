@@ -47,6 +47,7 @@ fun AddBudgetTransactionScreen(
 
     val pagerState = rememberPagerState { tabs.size }
     val scope = rememberCoroutineScope()
+    val saveActions = remember { mutableStateMapOf<Int, () -> Unit>() }
 
     Column(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F2F7)).statusBarsPadding()) {
         // --- TOP BAR ---
@@ -90,7 +91,7 @@ fun AddBudgetTransactionScreen(
                             .clickable {
                                 scope.launch { pagerState.animateScrollToPage(index) }
                             }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                            .padding(6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -102,8 +103,29 @@ fun AddBudgetTransactionScreen(
                     }
                 }
             }
-            Spacer(modifier = Modifier.width(36.dp))
+            
+            // Save Button
+            Button(
+                onClick = { saveActions[pagerState.currentPage]?.invoke() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                modifier = Modifier.height(36.dp),
+                enabled = saveActions.containsKey(pagerState.currentPage)
+            ) {
+                Text("Save", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+            }
         }
+
+        // Title
+        Text(
+            text = "New ${tabs[pagerState.currentPage]}",
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+            color = Color.Black
+        )
+        Spacer(modifier = Modifier.height(16.dp))
 
         HorizontalPager(
             state = pagerState,
@@ -121,7 +143,8 @@ fun AddBudgetTransactionScreen(
                             onSave = { 
                                 viewModel.addTransaction(it)
                                 onBackClick()
-                            }
+                            },
+                            onRegisterSaveAction = { saveActions[page] = it }
                         )
                     }
                 }
@@ -132,7 +155,8 @@ fun AddBudgetTransactionScreen(
                         onSave = { from, to, amt, memo, date ->
                             viewModel.transferBudget(from, to, amt, memo, date)
                             onBackClick()
-                        }
+                        },
+                        onRegisterSaveAction = { saveActions[page] = it }
                     )
                 }
             }
@@ -146,7 +170,8 @@ fun BudgetEntryForm(
     isIncome: Boolean,
     budget: Budget,
     allAccounts: List<Account>,
-    onSave: (Transaction) -> Unit
+    onSave: (Transaction) -> Unit,
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
 ) {
     var name by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
@@ -165,42 +190,33 @@ fun BudgetEntryForm(
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = date)
     val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
 
+    val saveAction = {
+        val amt = amount.toDoubleOrNull() ?: 0.0
+        if (name.isNotBlank() && amt > 0) {
+            onSave(Transaction(
+                id = UUID.randomUUID().toString(),
+                type = if (isIncome) TransactionType.INCOME else TransactionType.EXPENSE,
+                fromAccountId = selectedAccount?.id ?: "budget_virtual",
+                amount = amt,
+                payee = name,
+                description = description,
+                memo = memo,
+                date = date,
+                budgetId = budget.id,
+                status = status
+            ))
+        }
+    }
+
+    LaunchedEffect(name, amount, description, memo, date, status, selectedAccount, selectedCategory) {
+        onRegisterSaveAction(saveAction)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(if(isIncome) "New Income Entry" else "New Expense Entry", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Button(
-                onClick = {
-                    val amt = amount.toDoubleOrNull() ?: 0.0
-                    if (name.isNotBlank() && amt > 0) {
-                        onSave(Transaction(
-                            id = UUID.randomUUID().toString(),
-                            type = if (isIncome) TransactionType.INCOME else TransactionType.EXPENSE,
-                            fromAccountId = selectedAccount?.id ?: "budget_virtual",
-                            amount = amt,
-                            payee = name,
-                            description = description,
-                            memo = memo,
-                            date = date,
-                            budgetId = budget.id,
-                            status = status
-                        ))
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text("Save", fontWeight = FontWeight.Bold)
-            }
-        }
-
         BudgetSectionHeader("Describe your entry")
         BudgetCard {
             BudgetInputRow(Icons.Default.Badge, "Name", name) { name = it }
@@ -357,7 +373,8 @@ fun BudgetEntryForm(
 fun BudgetTransferForm(
     initialFromBudget: Budget?,
     allBudgets: List<Budget>,
-    onSave: (String, String, Double, String, Long) -> Unit
+    onSave: (String, String, Double, String, Long) -> Unit,
+    onRegisterSaveAction: (() -> Unit) -> Unit = {}
 ) {
     var fromBudget by remember { mutableStateOf(initialFromBudget) }
     var toBudget by remember { mutableStateOf<Budget?>(null) }
@@ -372,31 +389,22 @@ fun BudgetTransferForm(
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = date)
     val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
 
+    val saveAction = {
+        val amt = amount.toDoubleOrNull() ?: 0.0
+        if (fromBudget != null && toBudget != null && amt > 0) {
+            onSave(fromBudget!!.id, toBudget!!.id, amt, memo, date)
+        }
+    }
+
+    LaunchedEffect(fromBudget, toBudget, amount, memo, date) {
+        onRegisterSaveAction(saveAction)
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Budget Transfer", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-            Button(
-                onClick = {
-                    val amt = amount.toDoubleOrNull() ?: 0.0
-                    if (fromBudget != null && toBudget != null && amt > 0) {
-                        onSave(fromBudget!!.id, toBudget!!.id, amt, memo, date)
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text("Save", fontWeight = FontWeight.Bold)
-            }
-        }
-
         BudgetSectionHeader("Select Budgets")
         BudgetCard {
             BudgetClickableRow(Icons.Default.MoveToInbox, "From", fromBudget?.name ?: "Select source") { showFromPicker = true }

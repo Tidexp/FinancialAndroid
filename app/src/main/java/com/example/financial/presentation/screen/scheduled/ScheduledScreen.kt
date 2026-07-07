@@ -1,5 +1,6 @@
 package com.example.financial.presentation.screen.scheduled
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -15,8 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.financial.domain.model.AccountType
+import com.example.financial.domain.model.Recurrence
 import com.example.financial.domain.model.Transaction
 import com.example.financial.domain.model.TransactionStatus
+import com.example.financial.domain.model.TransactionType
 import com.example.financial.presentation.component.TransactionItem
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 import java.text.SimpleDateFormat
@@ -41,12 +45,76 @@ fun ScheduledScreen(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showSkipConfirm by remember { mutableStateOf(false) }
 
-    val scheduledTransactions = remember(uiState.transactions, searchQuery) {
-        uiState.transactions.filter { 
+    val today = remember { 
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+    }.timeInMillis
+
+    val scheduledTransactions = remember(uiState.transactions, uiState.accounts, searchQuery) {
+        val transactions = uiState.transactions.filter { 
             it.status == TransactionStatus.PLANNED &&
-            (it.payee?.contains(searchQuery, ignoreCase = true) == true ||
+            (searchQuery.isEmpty() ||
+             it.payee?.contains(searchQuery, ignoreCase = true) == true ||
              it.description?.contains(searchQuery, ignoreCase = true) == true)
-        }.sortedBy { it.date }
+        }.toMutableList()
+
+        // Thêm các khoản thanh toán từ tài khoản LOAN dựa trên firstDueDate
+        uiState.accounts.filter { it.type == AccountType.LOAN && !it.firstDueDate.isNullOrBlank() }
+            .forEach { account ->
+                try {
+                    val date = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).parse(account.firstDueDate!!)?.time ?: 0L
+                    if (date > 0) {
+                        // Tránh trùng lặp nếu đã có giao dịch PLANNED cho tài khoản này vào ngày này
+                        val alreadyExists = transactions.any { it.fromAccountId == account.id && Math.abs(it.date - date) < 86400000 }
+                        if (!alreadyExists) {
+                            val principal = account.principalAmount?.replace(Regex("[^0-9,.]"), "")?.replace(",", ".")?.toDoubleOrNull() ?: 0.0
+                            val apr = account.apr?.toDoubleOrNull() ?: 0.0
+                            val duration = account.duration?.toIntOrNull() ?: 0
+                            
+                            val emi = if (principal > 0 && apr > 0 && duration > 0) {
+                                val monthlyRate = apr / 12 / 100
+                                (principal * monthlyRate * Math.pow(1 + monthlyRate, duration.toDouble())) / (Math.pow(1 + monthlyRate, duration.toDouble()) - 1)
+                            } else if (duration > 0) {
+                                principal / duration
+                            } else 0.0
+
+                            if (searchQuery.isEmpty() || 
+                                account.name.contains(searchQuery, ignoreCase = true) || 
+                                "Loan".contains(searchQuery, ignoreCase = true)) {
+                                
+                                val isCompleted = duration > 0 && account.paymentsMade >= duration
+                                val description = if (isCompleted) "Loan Fully Paid: ${account.name}" else "Scheduled payment for ${account.name}"
+                                
+                                transactions.add(
+                                    Transaction(
+                                        id = "loan_payment_${account.id}",
+                                        type = TransactionType.EXPENSE,
+                                        fromAccountId = account.id,
+                                        amount = -emi,
+                                        payee = "Loan Payment",
+                                        description = description,
+                                        date = date,
+                                        status = TransactionStatus.PLANNED,
+                                        memo = if (isCompleted) "COMPLETED" else "",
+                                        recurrence = Recurrence(
+                                            frequencyValue = 1,
+                                            frequencyUnit = "Month"
+                                        )
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    // Bỏ qua lỗi parse date
+                }
+            }
+
+        transactions.sortedBy { it.date }
     }
 
     val groupedTransactions = remember(scheduledTransactions) {
@@ -221,16 +289,25 @@ fun ScheduledScreen(
             }
 
             items(transactions) { transaction ->
+                val isDue = transaction.date <= today + 86400000 // Hôm nay hoặc quá hạn
+                val isCompletedLoan = transaction.id.startsWith("loan_payment_") && transaction.memo == "COMPLETED"
+                
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = Color.White
-                    )
+                        containerColor = when {
+                            isCompletedLoan -> Color.Gray.copy(alpha = 0.1f)
+                            isDue -> Color(0xFFFFF1F0)
+                            else -> Color.White
+                        }
+                    ),
+                    border = if (isDue && !isCompletedLoan) BorderStroke(1.dp, Color.Red.copy(alpha = 0.5f)) else null
                 ) {
                     Box(modifier = Modifier.padding(horizontal = 16.dp)) {
                         TransactionItem(
                             transaction = transaction,
+                            strikethrough = isCompletedLoan,
                             onClick = {
                                 selectedTransaction = transaction
                                 showOptionsMenu = true
@@ -262,10 +339,23 @@ fun ScheduledScreen(
                     modifier = Modifier.padding(16.dp)
                 )
 
+                val isCompletedLoan = selectedTransaction!!.id.startsWith("loan_payment_") && selectedTransaction!!.memo == "COMPLETED"
+
                 ListItem(
-                    headlineContent = { Text("Pay") },
-                    leadingContent = { Icon(Icons.Default.CheckCircle, null) },
-                    modifier = Modifier.clickable {
+                    headlineContent = { 
+                        Text(
+                            "Pay", 
+                            color = if (isCompletedLoan) Color.Gray else MaterialTheme.colorScheme.onSurface
+                        ) 
+                    },
+                    leadingContent = { 
+                        Icon(
+                            Icons.Default.CheckCircle, 
+                            null,
+                            tint = if (isCompletedLoan) Color.Gray else MaterialTheme.colorScheme.primary
+                        ) 
+                    },
+                    modifier = Modifier.clickable(enabled = !isCompletedLoan) {
                         viewModel.payScheduledTransaction(selectedTransaction!!)
                         showOptionsMenu = false
                     }

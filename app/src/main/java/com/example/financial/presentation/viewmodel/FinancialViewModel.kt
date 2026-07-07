@@ -207,6 +207,13 @@ class FinancialViewModel(
 
     fun deleteTransaction(transaction: Transaction) {
         viewModelScope.launch {
+            if (transaction.id.startsWith("loan_payment_")) {
+                val accountId = transaction.id.removePrefix("loan_payment_")
+                _homeUiState.value.accounts.find { it.id == accountId }?.let { account ->
+                    repository.updateAccount(account.copy(firstDueDate = null))
+                }
+                return@launch
+            }
             repository.deleteTransaction(transaction)
 
             // If it was CLEARED, we might need to reverse the balance update.
@@ -250,13 +257,40 @@ class FinancialViewModel(
 
     fun payScheduledTransaction(transaction: Transaction) {
         viewModelScope.launch {
+            if (transaction.id.startsWith("loan_payment_")) {
+                val accountId = transaction.id.removePrefix("loan_payment_")
+                val currentAccounts = _homeUiState.value.accounts
+                currentAccounts.find { it.id == accountId }?.let { account ->
+                    val fromId = account.paymentAccountId ?: account.id
+                    val amount = Math.abs(transaction.amount)
+                    
+                    // 1. Create a CLEARED transaction (the payment itself)
+                    val isTransfer = account.paymentAccountId != null
+                    val payment = transaction.copy(
+                        id = java.util.UUID.randomUUID().toString(),
+                        type = if (isTransfer) TransactionType.TRANSFER else TransactionType.INCOME,
+                        fromAccountId = fromId,
+                        toAccountId = if (isTransfer) account.id else null,
+                        amount = amount,
+                        status = TransactionStatus.CLEARED,
+                        date = System.currentTimeMillis()
+                    )
+                    
+                    // 2. Add transaction and update balance
+                    addTransactionSync(payment)
+
+                    // 3. Advance due date
+                    advanceLoanDueDate(accountId)
+                }
+                return@launch
+            }
             // 1. Create a CLEARED transaction (the payment itself)
             val payment = transaction.copy(
                 id = java.util.UUID.randomUUID().toString(),
                 status = TransactionStatus.CLEARED,
                 date = System.currentTimeMillis()
             )
-            addTransaction(payment)
+            addTransactionSync(payment)
 
             // 2. Reschedule the original one
             rescheduleTransaction(transaction)
@@ -265,7 +299,36 @@ class FinancialViewModel(
 
     fun skipScheduledTransaction(transaction: Transaction) {
         viewModelScope.launch {
+            if (transaction.id.startsWith("loan_payment_")) {
+                val accountId = transaction.id.removePrefix("loan_payment_")
+                advanceLoanDueDate(accountId)
+                return@launch
+            }
             rescheduleTransaction(transaction)
+        }
+    }
+
+    private suspend fun advanceLoanDueDate(accountId: String) {
+        repository.getAccounts().take(1).collect { accounts ->
+            accounts.find { it.id == accountId }?.let { account ->
+                try {
+                    val sdf = java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault())
+                    val nextDueDate = if (!account.firstDueDate.isNullOrBlank()) {
+                        val date = sdf.parse(account.firstDueDate)
+                        if (date != null) {
+                            val calendar = java.util.Calendar.getInstance()
+                            calendar.time = date
+                            calendar.add(java.util.Calendar.MONTH, 1)
+                            sdf.format(calendar.time)
+                        } else null
+                    } else null
+
+                    repository.updateAccount(account.copy(
+                        firstDueDate = nextDueDate,
+                        paymentsMade = account.paymentsMade + 1
+                    ))
+                } catch (e: Exception) {}
+            }
         }
     }
 
@@ -308,45 +371,49 @@ class FinancialViewModel(
 
     fun addTransaction(transaction: Transaction) {
         viewModelScope.launch {
-            repository.addTransaction(transaction)
-            
-            // Chỉ cập nhật số dư nếu KHÔNG PHẢI giao dịch ảo của Budget
-            if (transaction.fromAccountId.startsWith("budget_")) return@launch
+            addTransactionSync(transaction)
+        }
+    }
 
-            val currentAccounts = _homeUiState.value.accounts
-            val account = currentAccounts.find { it.id == transaction.fromAccountId }
+    private suspend fun addTransactionSync(transaction: Transaction) {
+        repository.addTransaction(transaction)
+        
+        // Chỉ cập nhật số dư nếu KHÔNG PHẢI giao dịch ảo của Budget
+        if (transaction.fromAccountId.startsWith("budget_")) return
 
-            if (account != null) {
-                var newBalance = parseBalance(account.balance)
+        val currentAccounts = _homeUiState.value.accounts
+        val account = currentAccounts.find { it.id == transaction.fromAccountId }
 
-                when (transaction.type) {
-                    TransactionType.EXPENSE, TransactionType.BUY -> {
-                        newBalance -= transaction.amount
-                    }
-                    TransactionType.INCOME, TransactionType.SELL -> {
-                        newBalance += transaction.amount
-                    }
-                    TransactionType.ADJUSTMENT -> {
-                        // Trong AdjustBalanceScreen, amount được gửi là giá trị số dư MỚI
-                        newBalance = transaction.amount
-                    }
-                    TransactionType.TRANSFER -> {
-                        newBalance -= transaction.amount
-                        // Cập nhật tài khoản nhận
-                        transaction.toAccountId?.let { toId ->
-                            currentAccounts.find { it.id == toId }?.let { toAcc ->
-                                val toNewBal = parseBalance(toAcc.balance) + transaction.amount
-                                repository.updateAccount(toAcc.copy(balance = formatBalance(toNewBal)))
-                            }
+        if (account != null) {
+            var newBalance = parseBalance(account.balance)
+
+            when (transaction.type) {
+                TransactionType.EXPENSE, TransactionType.BUY -> {
+                    newBalance -= transaction.amount
+                }
+                TransactionType.INCOME, TransactionType.SELL -> {
+                    newBalance += transaction.amount
+                }
+                TransactionType.ADJUSTMENT -> {
+                    // Trong AdjustBalanceScreen, amount được gửi là giá trị số dư MỚI
+                    newBalance = transaction.amount
+                }
+                TransactionType.TRANSFER -> {
+                    newBalance -= transaction.amount
+                    // Cập nhật tài khoản nhận
+                    transaction.toAccountId?.let { toId ->
+                        currentAccounts.find { it.id == toId }?.let { toAcc ->
+                            val toNewBal = parseBalance(toAcc.balance) + transaction.amount
+                            repository.updateAccount(toAcc.copy(balance = formatBalance(toNewBal)))
                         }
                     }
-                    TransactionType.EXCHANGE -> {
-                        // Trừ tiền ở account nguồn + phí hoa hồng (nếu có)
-                        newBalance -= (transaction.amount + (transaction.commission ?: 0.0))
-                    }
                 }
-                repository.updateAccount(account.copy(balance = formatBalance(newBalance)))
+                TransactionType.EXCHANGE -> {
+                    // Trừ tiền ở account nguồn + phí hoa hồng (nếu có)
+                    newBalance -= (transaction.amount + (transaction.commission ?: 0.0))
+                }
             }
+            repository.updateAccount(account.copy(balance = formatBalance(newBalance)))
         }
     }
 
@@ -387,8 +454,8 @@ class FinancialViewModel(
         viewModelScope.launch { repository.addAccount(Account(id = java.util.UUID.randomUUID().toString(), name = name, balance = balance, type = AccountType.CREDIT, color = androidx.compose.ui.graphics.Color(0xFFE91E63), iconUri = icon, creditLimit = limit, statementCloseDay = day, autoClear = auto, additionalInfo = info, groupId = gId, monitoredByBudgetId = mId)) }
     }
 
-    fun addLoanAccount(name: String, princ: String, apr: String, dur: String, start: String, first: String, gId: String?, info: String, mId: String? = null) {
-        viewModelScope.launch { repository.addAccount(Account(id = java.util.UUID.randomUUID().toString(), name = name, balance = "-$princ", type = AccountType.LOAN, color = androidx.compose.ui.graphics.Color(0xFF4CAF50), principalAmount = princ, apr = apr, duration = dur, startDate = start, firstDueDate = first, groupId = gId, additionalInfo = info, monitoredByBudgetId = mId)) }
+    fun addLoanAccount(name: String, princ: String, apr: String, dur: String, start: String, first: String, gId: String?, info: String, mId: String? = null, pAccId: String? = null, pCat: String? = null, pPayee: String? = null) {
+        viewModelScope.launch { repository.addAccount(Account(id = java.util.UUID.randomUUID().toString(), name = name, balance = "-$princ", type = AccountType.LOAN, color = androidx.compose.ui.graphics.Color(0xFF4CAF50), principalAmount = princ, apr = apr, duration = dur, startDate = start, firstDueDate = first, groupId = gId, additionalInfo = info, monitoredByBudgetId = mId, paymentAccountId = pAccId, paymentCategory = pCat, paymentPayee = pPayee)) }
     }
 
     fun addInvestmentAccount(name: String, bal: String, date: String, gId: String?, info: String, mId: String? = null) {

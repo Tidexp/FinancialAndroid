@@ -46,6 +46,7 @@ data class PaymentScheduleItem(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateLoanAccountScreen(
+    accountId: String? = null,
     onBackClick: () -> Unit,
     onSaveClick: (
         name: String,
@@ -56,12 +57,19 @@ fun CreateLoanAccountScreen(
         firstDueDate: String,
         groupId: String?,
         additionalInfo: String,
-        monitoredByBudgetId: String?
+        monitoredByBudgetId: String?,
+        paymentAccountId: String?,
+        paymentCategory: String?,
+        paymentPayee: String?
     ) -> Unit,
+    onUpdateClick: (Account) -> Unit = {},
     groups: List<AccountGroup> = emptyList(),
     budgets: List<Budget> = emptyList(),
     accounts: List<Account> = emptyList()
 ) {
+    val existingAccount = remember(accountId, accounts) { accounts.find { it.id == accountId } }
+    val paymentsMade = existingAccount?.paymentsMade ?: 0
+
     var currentSubPage by remember { mutableStateOf(LoanSubPage.MAIN) }
 
     BackHandler(enabled = currentSubPage != LoanSubPage.MAIN) {
@@ -75,16 +83,16 @@ fun CreateLoanAccountScreen(
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
 
-    var accountName by remember { mutableStateOf("") }
-    var principalAmount by remember { mutableStateOf("0,00 USD") }
-    var apr by remember { mutableStateOf("") }
-    var durationMonths by remember { mutableStateOf("12") }
+    var accountName by remember { mutableStateOf(existingAccount?.name ?: "") }
+    var principalAmount by remember { mutableStateOf(existingAccount?.principalAmount ?: "0,00 USD") }
+    var apr by remember { mutableStateOf(existingAccount?.apr ?: "") }
+    var durationMonths by remember { mutableStateOf(existingAccount?.duration ?: "12") }
     
     val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
     val initialDate = dateFormatter.format(Date())
     
-    var startDate by remember { mutableStateOf(initialDate) }
-    var firstDueDate by remember { mutableStateOf(initialDate) }
+    var startDate by remember { mutableStateOf(existingAccount?.startDate ?: initialDate) }
+    var firstDueDate by remember { mutableStateOf(existingAccount?.firstDueDate ?: initialDate) }
 
     val startDatePickerState = rememberDatePickerState()
     var showStartDatePicker by remember { mutableStateOf(false) }
@@ -160,17 +168,17 @@ fun CreateLoanAccountScreen(
     }
 
     // Payment Plan States
-    var paymentAccountId by remember { mutableStateOf<String?>(null) }
-    var paymentCategory by remember { mutableStateOf("") }
-    var paymentPayee by remember { mutableStateOf("") }
+    var paymentAccountId by remember { mutableStateOf<String?>(existingAccount?.paymentAccountId) }
+    var paymentCategory by remember { mutableStateOf(existingAccount?.paymentCategory ?: "") }
+    var paymentPayee by remember { mutableStateOf(existingAccount?.paymentPayee ?: "") }
     var showAccountPicker by remember { mutableStateOf(false) }
 
-    var additionalInfo by remember { mutableStateOf("") }
+    var additionalInfo by remember { mutableStateOf(existingAccount?.additionalInfo ?: "") }
     var includeInNetWorth by remember { mutableStateOf(true) }
     var includeInGroupBalance by remember { mutableStateOf(true) }
-    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var selectedGroupId by remember { mutableStateOf<String?>(existingAccount?.groupId) }
     var showGroupPicker by remember { mutableStateOf(false) }
-    var selectedBudgetId by remember { mutableStateOf<String?>(null) }
+    var selectedBudgetId by remember { mutableStateOf<String?>(existingAccount?.monitoredByBudgetId) }
     var showBudgetPicker by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -206,17 +214,37 @@ fun CreateLoanAccountScreen(
                         Button(
                             onClick = {
                                 if (accountName.isNotBlank() && (durationMonths.toIntOrNull() ?: 0) >= 2) {
-                                    onSaveClick(
-                                        accountName,
-                                        principalAmount,
-                                        apr,
-                                        durationMonths,
-                                        startDate,
-                                        firstDueDate,
-                                        selectedGroupId,
-                                        additionalInfo,
-                                        selectedBudgetId
-                                    )
+                                    if (existingAccount != null) {
+                                        onUpdateClick(existingAccount.copy(
+                                            name = accountName,
+                                            principalAmount = principalAmount,
+                                            apr = apr,
+                                            duration = durationMonths,
+                                            startDate = startDate,
+                                            firstDueDate = firstDueDate,
+                                            groupId = selectedGroupId,
+                                            additionalInfo = additionalInfo,
+                                            monitoredByBudgetId = selectedBudgetId,
+                                            paymentAccountId = paymentAccountId,
+                                            paymentCategory = paymentCategory,
+                                            paymentPayee = paymentPayee
+                                        ))
+                                    } else {
+                                        onSaveClick(
+                                            accountName,
+                                            principalAmount,
+                                            apr,
+                                            durationMonths,
+                                            startDate,
+                                            firstDueDate,
+                                            selectedGroupId,
+                                            additionalInfo,
+                                            selectedBudgetId,
+                                            paymentAccountId,
+                                            paymentCategory,
+                                            paymentPayee
+                                        )
+                                    }
                                 }
                             },
                             enabled = accountName.isNotBlank() && (durationMonths.toIntOrNull() ?: 0) >= 2,
@@ -286,7 +314,8 @@ fun CreateLoanAccountScreen(
                                         onStartDateClick = { showStartDatePicker = true },
                                         firstDueDate = firstDueDate,
                                         onFirstDueDateClick = { showFirstDueDatePicker = true },
-                                        onPaymentPlanClick = { currentSubPage = LoanSubPage.PAYMENT_PLAN }
+                                        onPaymentPlanClick = { currentSubPage = LoanSubPage.PAYMENT_PLAN },
+                                        paymentsMade = paymentsMade
                                     )
                                 } else {
                                     LoanAdvancedFields(
@@ -323,7 +352,12 @@ fun CreateLoanAccountScreen(
                         schedule = schedule,
                         totalInterest = schedule.sumOf { it.interest },
                         totalPrincipal = schedule.sumOf { it.principal },
-                        onItemClick = { index -> editingMonthIndex = index }
+                        paymentsMade = paymentsMade,
+                        onItemClick = { index -> 
+                            if (index >= paymentsMade) {
+                                editingMonthIndex = index 
+                            }
+                        }
                     )
                 }
             }
@@ -649,6 +683,7 @@ fun PaymentSchedulePage(
     schedule: List<PaymentScheduleItem>,
     totalInterest: Double,
     totalPrincipal: Double,
+    paymentsMade: Int = 0,
     onItemClick: (Int) -> Unit
 ) {
     val totalAmount = totalInterest + totalPrincipal
@@ -684,8 +719,9 @@ fun PaymentSchedulePage(
         ) {
             LazyColumn {
                 itemsIndexed(schedule) { index, item ->
-                    Column(modifier = Modifier.clickable { onItemClick(index) }) {
-                        ScheduleItemRow(item)
+                    val isPaid = index < paymentsMade
+                    Column(modifier = Modifier.clickable(enabled = !isPaid) { onItemClick(index) }) {
+                        ScheduleItemRow(item, isPaid = isPaid)
                     }
                     if (index < schedule.size - 1) LoanDivider()
                 }
@@ -708,7 +744,8 @@ fun LoanBasicFields(
     onStartDateClick: () -> Unit,
     firstDueDate: String,
     onFirstDueDateClick: () -> Unit,
-    onPaymentPlanClick: () -> Unit
+    onPaymentPlanClick: () -> Unit,
+    paymentsMade: Int = 0
 ) {
     Column {
         ListItem(
@@ -799,10 +836,19 @@ fun LoanBasicFields(
         ClickableLoanItem(Icons.Outlined.EventNote, "First due date", firstDueDate, isDate = true, onClick = onFirstDueDateClick)
         LoanDivider()
 
+        val isLoanFullyPaid = duration.toIntOrNull()?.let { it > 0 && paymentsMade >= it } ?: false
         ListItem(
             modifier = Modifier.clickable { onPaymentPlanClick() },
             leadingContent = { Icon(Icons.Default.Description, null, tint = Color.Gray) },
-            headlineContent = { Text("Payment plan", color = Color.Gray) },
+            headlineContent = { 
+                Text(
+                    if (isLoanFullyPaid) "Payment plan (FULLY PAID)" else "Payment plan", 
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        textDecoration = if (isLoanFullyPaid) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                    )
+                ) 
+            },
             trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.LightGray) }
         )
     }
@@ -981,39 +1027,52 @@ fun ScheduleSummaryCard(
 }
 
 @Composable
-fun ScheduleItemRow(item: PaymentScheduleItem) {
+fun ScheduleItemRow(item: PaymentScheduleItem, isPaid: Boolean = false) {
+    val contentAlpha = if (isPaid) 0.5f else 1f
+    val textDecoration = if (isPaid) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+
     Row(
         modifier = Modifier.fillMaxWidth().padding(16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text("Month ${item.month}", fontWeight = FontWeight.Bold)
-            Text(item.date, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Text(
+                "Month ${item.month}", 
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.bodyLarge.copy(textDecoration = textDecoration),
+                color = Color.Black.copy(alpha = contentAlpha)
+            )
+            Text(
+                item.date, 
+                style = MaterialTheme.typography.bodySmall.copy(textDecoration = textDecoration),
+                color = Color.Gray.copy(alpha = contentAlpha)
+            )
         }
         Column(horizontalAlignment = Alignment.End) {
             Text(
                 String.format(Locale.getDefault(), "$%.2f", item.payment),
                 fontWeight = FontWeight.Bold,
-                color = Color.Black
+                style = MaterialTheme.typography.bodyLarge.copy(textDecoration = textDecoration),
+                color = Color.Black.copy(alpha = contentAlpha)
             )
             Row {
                 Text(
                     "P: ${String.format(Locale.getDefault(), "$%.2f", item.principal)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF4CAF50)
+                    style = MaterialTheme.typography.labelSmall.copy(textDecoration = textDecoration),
+                    color = (if (isPaid) Color.Gray else Color(0xFF4CAF50)).copy(alpha = contentAlpha)
                 )
-                Text(" | ", style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                Text(" | ", style = MaterialTheme.typography.labelSmall, color = Color.Gray.copy(alpha = contentAlpha))
                 Text(
                     "I: ${String.format(Locale.getDefault(), "$%.2f", item.interest)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFFF44336)
+                    style = MaterialTheme.typography.labelSmall.copy(textDecoration = textDecoration),
+                    color = (if (isPaid) Color.Gray else Color(0xFFF44336)).copy(alpha = contentAlpha)
                 )
             }
             Text(
                 "Bal: ${String.format(Locale.getDefault(), "$%.2f", item.remainingBalance)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.DarkGray,
+                style = MaterialTheme.typography.labelSmall.copy(textDecoration = textDecoration),
+                color = Color.DarkGray.copy(alpha = contentAlpha),
                 fontWeight = FontWeight.Medium
             )
         }

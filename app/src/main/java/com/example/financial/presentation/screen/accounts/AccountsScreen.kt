@@ -33,6 +33,8 @@ fun AccountsScreen(
     onAddAccountClick: () -> Unit,
     onAddGroupClick: () -> Unit,
     onAccountClick: (String) -> Unit,
+    onEditAccountClick: (Account) -> Unit,
+    onEditGroupClick: (AccountGroup) -> Unit,
     onNavigateToTransaction: (String, String) -> Unit
 ) {
     val uiState by viewModel.homeUiState.collectAsState()
@@ -496,7 +498,7 @@ fun AccountsScreen(
                 DropdownMenuItem(
                     text = { Text("Edit Account") },
                     onClick = {
-                        // TODO: onEditAccountClick(account)
+                        onEditAccountClick(account)
                         selectedAccountForMenu = null
                     },
                     leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
@@ -555,7 +557,7 @@ fun AccountsScreen(
                 DropdownMenuItem(
                     text = { Text("Edit Group") },
                     onClick = {
-                        // TODO: onEditGroupClick(group)
+                        onEditGroupClick(group)
                         selectedGroupForMenu = null
                     },
                     leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }

@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.financial.domain.model.AccountType
+import com.example.financial.domain.model.Account
 import com.example.financial.presentation.component.IconPickerBottomSheet
 import android.net.Uri
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -29,6 +30,7 @@ import com.example.financial.domain.model.Budget
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateStandardAccountScreen(
+    accountId: String? = null,
     accountType: AccountType,
     onBackClick: () -> Unit,
     onSaveClick: (
@@ -40,27 +42,31 @@ fun CreateStandardAccountScreen(
         additionalInfo: String,
         monitoredByBudgetId: String?
     ) -> Unit,
+    onUpdateClick: (Account) -> Unit = {},
     groups: List<AccountGroup> = emptyList(),
-    budgets: List<Budget> = emptyList()
+    budgets: List<Budget> = emptyList(),
+    accounts: List<Account> = emptyList()
 ) {
+    val existingAccount = remember(accountId, accounts) { accounts.find { it.id == accountId } }
+    
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
 
     // Basic States
-    var accountName by remember { mutableStateOf("") }
-    var openingBalance by remember { mutableStateOf("0,00 USD") }
+    var accountName by remember { mutableStateOf(existingAccount?.name ?: "") }
+    var openingBalance by remember { mutableStateOf(existingAccount?.balance ?: "0,00 USD") }
     var selectedIcon by remember { mutableStateOf<ImageVector?>(null) }
-    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(existingAccount?.iconUri?.let { Uri.parse(it) }) }
     var showIconPicker by remember { mutableStateOf(false) }
-    var autoClear by remember { mutableStateOf(false) }
+    var autoClear by remember { mutableStateOf(existingAccount?.autoClear ?: false) }
 
     // Advanced States
     var includeInNetWorth by remember { mutableStateOf(true) }
     var includeInGroupBalance by remember { mutableStateOf(true) }
-    var additionalInfo by remember { mutableStateOf("") }
-    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var additionalInfo by remember { mutableStateOf(existingAccount?.additionalInfo ?: "") }
+    var selectedGroupId by remember { mutableStateOf(existingAccount?.groupId) }
     var showGroupPicker by remember { mutableStateOf(false) }
-    var selectedBudgetId by remember { mutableStateOf<String?>(null) }
+    var selectedBudgetId by remember { mutableStateOf(existingAccount?.monitoredByBudgetId) }
     var showBudgetPicker by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -82,7 +88,19 @@ fun CreateStandardAccountScreen(
                     Button(
                         onClick = {
                             if (accountName.isNotBlank()) {
-                                onSaveClick(accountName, openingBalance, accountType, selectedGroupId, autoClear, additionalInfo, selectedBudgetId)
+                                if (existingAccount != null) {
+                                    onUpdateClick(existingAccount.copy(
+                                        name = accountName,
+                                        balance = openingBalance,
+                                        iconUri = selectedImageUri?.toString(),
+                                        autoClear = autoClear,
+                                        additionalInfo = additionalInfo,
+                                        groupId = selectedGroupId,
+                                        monitoredByBudgetId = selectedBudgetId
+                                    ))
+                                } else {
+                                    onSaveClick(accountName, openingBalance, accountType, selectedGroupId, autoClear, additionalInfo, selectedBudgetId)
+                                }
                             }
                         },
                         shape = RoundedCornerShape(50),

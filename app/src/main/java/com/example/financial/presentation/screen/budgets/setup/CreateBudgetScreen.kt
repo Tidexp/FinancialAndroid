@@ -44,6 +44,7 @@ fun CreateBudgetScreen(
     
     val pagerState = rememberPagerState(initialPage = initialPage) { tabs.size }
     val scope = rememberCoroutineScope()
+    val saveActions = remember { mutableStateMapOf<Int, () -> Unit>() }
 
     Column(
         modifier = Modifier
@@ -89,21 +90,15 @@ fun CreateBudgetScreen(
                                 .clickable {
                                     scope.launch { pagerState.animateScrollToPage(index) }
                                 }
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                                .padding(6.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = title,
-                                    tint = if (pagerState.currentPage == index) Color.Black else Color.Gray,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                if (pagerState.currentPage == index) {
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                }
-                            }
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = title,
+                                tint = if (pagerState.currentPage == index) Color.Black else Color.Gray,
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
                     }
                 }
@@ -114,7 +109,30 @@ fun CreateBudgetScreen(
                     fontSize = 18.sp
                 )
             }
-            Spacer(modifier = Modifier.width(36.dp))
+            
+            // Save Button
+            Button(
+                onClick = { saveActions[pagerState.currentPage]?.invoke() },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
+                modifier = Modifier.height(36.dp),
+                enabled = saveActions.containsKey(pagerState.currentPage)
+            ) {
+                Text("Save", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
+            }
+        }
+
+        // Title
+        if (existingBudget == null) {
+            Text(
+                text = "New ${tabs[pagerState.currentPage]} Budget",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                color = Color.Black
+            )
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
         HorizontalPager(
@@ -151,7 +169,9 @@ fun CreateBudgetScreen(
                         onCloseClick()
                     },
                     budgetGroups = uiState.budgetGroups,
-                    accounts = uiState.accounts
+                    accounts = uiState.accounts,
+                    showHeader = false,
+                    onRegisterSaveAction = { saveActions[page] = it }
                 )
             } else {
                 CreateIncomeBudgetScreen(
@@ -181,7 +201,9 @@ fun CreateBudgetScreen(
                         onCloseClick()
                     },
                     budgetGroups = uiState.budgetGroups,
-                    accounts = uiState.accounts
+                    accounts = uiState.accounts,
+                    showHeader = false,
+                    onRegisterSaveAction = { saveActions[page] = it }
                 )
             }
         }

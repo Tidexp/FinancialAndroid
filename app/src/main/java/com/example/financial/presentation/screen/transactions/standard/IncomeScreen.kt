@@ -5,8 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.EventNote
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -45,20 +43,12 @@ fun IncomeScreen(
     var memo by remember { mutableStateOf("") }
     var status by remember { mutableStateOf(TransactionStatus.CLEARED) }
     var transactionDate by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    var isAutoPay by remember { mutableStateOf(false) }
-
-    var frequency by remember { mutableStateOf("Once") }
-    var weekendStrategy by remember { mutableStateOf("No change") }
-    var endCondition by remember { mutableStateOf("Never") }
 
     // Picker states
     var showAccountPicker by remember { mutableStateOf(false) }
     var showCategoryPicker by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    var showFrequencyPicker by remember { mutableStateOf(false) }
-    var showWeekendPicker by remember { mutableStateOf(false) }
-    var showEndPicker by remember { mutableStateOf(false) }
 
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = transactionDate)
     val timePickerState = rememberTimePickerState(
@@ -69,9 +59,6 @@ fun IncomeScreen(
     val timeFormatter = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
 
     val categories = listOf("Salary", "Interest", "Gifts", "Selling", "Other")
-    val frequencies = listOf("Once", "Daily", "Weekly", "Monthly", "Yearly")
-    val strategies = listOf("No change", "Previous work day", "Next work day")
-    val ends = listOf("Never", "After 1 year", "Specific date")
 
     val saveAction = {
         val amountValue = parseNumericInput(amount)
@@ -222,27 +209,6 @@ fun IncomeScreen(
         }
         TransactionDivider()
 
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.ScreenshotMonitor, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(16.dp))
-            Text("Auto-pay", color = Color.Black, fontSize = 16.sp, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Outlined.HelpOutline, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Switch(
-                checked = isAutoPay,
-                onCheckedChange = { isAutoPay = it },
-                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF3478F6))
-            )
-        }
-        TransactionDivider()
-
-        ExpenseItem(icon = Icons.Outlined.Repeat, label = "Repeat", value = frequency, onClick = { showFrequencyPicker = true })
-        TransactionDivider()
-        ExpenseItem(icon = Icons.AutoMirrored.Outlined.EventNote, label = "Weekends", value = weekendStrategy, onClick = { showWeekendPicker = true })
-        TransactionDivider()
-        ExpenseItem(icon = Icons.Outlined.StopCircle, label = "End", value = endCondition, onClick = { showEndPicker = true })
-        TransactionDivider()
-
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -276,33 +242,6 @@ fun IncomeScreen(
             PickerSheetContent("Select Category", categories, { it }, { Icons.Default.Folder }, { Color.Gray }, {
                 category = it
                 showCategoryPicker = false
-            })
-        }
-    }
-
-    if (showFrequencyPicker) {
-        ModalBottomSheet(onDismissRequest = { showFrequencyPicker = false }) {
-            PickerSheetContent("Repeat Frequency", frequencies, { it }, { Icons.Default.Repeat }, { Color.Gray }, {
-                frequency = it
-                showFrequencyPicker = false
-            })
-        }
-    }
-
-    if (showWeekendPicker) {
-        ModalBottomSheet(onDismissRequest = { showWeekendPicker = false }) {
-            PickerSheetContent("On Weekends", strategies, { it }, { Icons.Default.Event }, { Color.Gray }, {
-                weekendStrategy = it
-                showWeekendPicker = false
-            })
-        }
-    }
-
-    if (showEndPicker) {
-        ModalBottomSheet(onDismissRequest = { showEndPicker = false }) {
-            PickerSheetContent("Ends", ends, { it }, { Icons.Default.StopCircle }, { Color.Gray }, {
-                endCondition = it
-                showEndPicker = false
             })
         }
     }

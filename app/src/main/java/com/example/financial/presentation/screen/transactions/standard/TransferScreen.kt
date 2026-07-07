@@ -8,8 +8,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.EventNote
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -40,7 +38,6 @@ fun TransferScreen(
     var amount by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var memo by remember { mutableStateOf("") }
-    var isAutoPay by remember { mutableStateOf(false) }
     
     var selectedToAccount by remember { mutableStateOf<Account?>(null) }
     var showToAccountPicker by remember { mutableStateOf(false) }
@@ -127,11 +124,6 @@ fun TransferScreen(
             Text("Date & time", color = Color.Gray, fontSize = 14.sp)
         }
         TransactionDivider()
-
-        ScheduledTransactionFields(
-            isAutoPay = isAutoPay,
-            onAutoPayChange = { isAutoPay = it }
-        )
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),

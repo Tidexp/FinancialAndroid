@@ -8,8 +8,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.financial.domain.model.AccountType
+import com.example.financial.domain.model.TransactionStatus
+import com.example.financial.presentation.viewmodel.FinancialViewModel
+import java.text.SimpleDateFormat
+import java.util.*
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -33,9 +42,36 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MainApp() {
+fun MainApp(viewModel: FinancialViewModel = viewModel(factory = FinancialViewModel.Factory)) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val uiState by viewModel.homeUiState.collectAsState()
+
+    val hasDueItems = remember(uiState.transactions, uiState.accounts) {
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        
+        val endOfToday = today + 86400000
+        
+        val plannedDue = uiState.transactions.any { 
+            it.status == TransactionStatus.PLANNED && it.date <= endOfToday 
+        }
+        
+        val loansDue = uiState.accounts.any { account ->
+            if (account.type == AccountType.LOAN && !account.firstDueDate.isNullOrBlank()) {
+                try {
+                    val date = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).parse(account.firstDueDate)?.time ?: 0L
+                    date > 0 && date <= endOfToday
+                } catch (e: Exception) { false }
+            } else false
+        }
+        
+        plannedDue || loansDue
+    }
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
@@ -51,10 +87,18 @@ fun MainApp() {
 
                 item(
                     icon = {
-                        Icon(
-                            imageVector = screen.icon,
-                            contentDescription = screen.label
-                        )
+                        BadgedBox(
+                            badge = {
+                                if (screen == Screen.Scheduled && hasDueItems) {
+                                    Badge(containerColor = Color.Red)
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = screen.icon,
+                                contentDescription = screen.label
+                            )
+                        }
                     },
                     label = { Text(screen.label) },
                     selected = isTabActive,

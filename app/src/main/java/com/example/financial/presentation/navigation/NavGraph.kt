@@ -44,6 +44,19 @@ fun NavGraph(navController: NavHostController) {
                 onAccountClick = { accountId ->
                     navController.navigate("account_detail/$accountId")
                 },
+                onEditAccountClick = { account ->
+                    val route = when (account.type) {
+                        AccountType.CHECKING, AccountType.SAVINGS, AccountType.CASH_WALLET -> "edit_standard_account/${account.id}"
+                        AccountType.CREDIT -> "edit_credit_account/${account.id}"
+                        AccountType.LOAN -> "edit_loan_account/${account.id}"
+                        AccountType.INVESTMENT -> "edit_investment_account/${account.id}"
+                        AccountType.FOREX -> "edit_forex_account/${account.id}"
+                    }
+                    navController.navigate(route)
+                },
+                onEditGroupClick = { group ->
+                    // navController.navigate("edit_account_group/${group.id}")
+                },
                 onNavigateToTransaction = { accountId, type ->
                     navController.navigate("add_transaction/$accountId/$type")
                 }
@@ -101,6 +114,31 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
+        composable(
+            route = "edit_standard_account/{accountId}",
+            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getString("accountId")
+            val uiState by viewModel.homeUiState.collectAsState()
+            val account = uiState.accounts.find { it.id == accountId }
+            
+            if (account != null) {
+                CreateStandardAccountScreen(
+                    accountId = accountId,
+                    accountType = account.type,
+                    onBackClick = { navController.popBackStack() },
+                    onSaveClick = { _, _, _, _, _, _, _ -> },
+                    onUpdateClick = { updatedAccount ->
+                        viewModel.updateAccount(updatedAccount)
+                        navController.popBackStack()
+                    },
+                    groups = uiState.accountGroups,
+                    budgets = uiState.budgets,
+                    accounts = uiState.accounts
+                )
+            }
+        }
+
         // 2. Màn hình tạo tài khoản TÍN DỤNG (Credit) mới thêm
         composable(route = "create_credit_account") {
             val uiState by viewModel.homeUiState.collectAsState()
@@ -113,6 +151,30 @@ fun NavGraph(navController: NavHostController) {
                 groups = uiState.accountGroups,
                 budgets = uiState.budgets
             )
+        }
+
+        composable(
+            route = "edit_credit_account/{accountId}",
+            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getString("accountId")
+            val uiState by viewModel.homeUiState.collectAsState()
+            val account = uiState.accounts.find { it.id == accountId }
+            
+            if (account != null) {
+                CreateCreditAccountScreen(
+                    accountId = accountId,
+                    onBackClick = { navController.popBackStack() },
+                    onSaveClick = { _, _, _, _, _, _, _, _, _ -> },
+                    onUpdateClick = { updatedAccount ->
+                        viewModel.updateAccount(updatedAccount)
+                        navController.popBackStack()
+                    },
+                    groups = uiState.accountGroups,
+                    budgets = uiState.budgets,
+                    accounts = uiState.accounts
+                )
+            }
         }
 
         composable(Screen.CreateAccountGroup.route) {
@@ -132,9 +194,29 @@ fun NavGraph(navController: NavHostController) {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateLoanAccountScreen(
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { name, principal, apr, duration, start, first, groupId, info, monitoredByBudgetId ->
-                    viewModel.addLoanAccount(name, principal, apr, duration, start, first, groupId, info, monitoredByBudgetId)
+                onSaveClick = { name, principal, apr, duration, start, first, groupId, info, monitoredByBudgetId, paymentAccountId, paymentCategory, paymentPayee ->
+                    viewModel.addLoanAccount(name, principal, apr, duration, start, first, groupId, info, monitoredByBudgetId, paymentAccountId, paymentCategory, paymentPayee)
                     navController.popBackStack(Screen.Accounts.route, inclusive = false)
+                },
+                groups = uiState.accountGroups,
+                budgets = uiState.budgets,
+                accounts = uiState.accounts
+            )
+        }
+
+        composable(
+            route = "edit_loan_account/{accountId}",
+            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getString("accountId")
+            val uiState by viewModel.homeUiState.collectAsState()
+            CreateLoanAccountScreen(
+                accountId = accountId,
+                onBackClick = { navController.popBackStack() },
+                onSaveClick = { _, _, _, _, _, _, _, _, _, _, _, _ -> }, // Not used for edit
+                onUpdateClick = { account ->
+                    viewModel.updateAccount(account)
+                    navController.popBackStack()
                 },
                 groups = uiState.accountGroups,
                 budgets = uiState.budgets,
@@ -156,6 +238,30 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
+        composable(
+            route = "edit_investment_account/{accountId}",
+            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getString("accountId")
+            val uiState by viewModel.homeUiState.collectAsState()
+            val account = uiState.accounts.find { it.id == accountId }
+            
+            if (account != null) {
+                CreateInvestmentAccountScreen(
+                    accountId = accountId,
+                    onBackClick = { navController.popBackStack() },
+                    onSaveClick = { _, _, _, _, _, _ -> },
+                    onUpdateClick = { updatedAccount ->
+                        viewModel.updateAccount(updatedAccount)
+                        navController.popBackStack()
+                    },
+                    groups = uiState.accountGroups,
+                    budgets = uiState.budgets,
+                    accounts = uiState.accounts
+                )
+            }
+        }
+
         composable("create_forex_crypto_account") {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateForexCryptoAccountScreen(
@@ -167,6 +273,30 @@ fun NavGraph(navController: NavHostController) {
                 groups = uiState.accountGroups,
                 budgets = uiState.budgets
             )
+        }
+
+        composable(
+            route = "edit_forex_account/{accountId}",
+            arguments = listOf(navArgument("accountId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val accountId = backStackEntry.arguments?.getString("accountId")
+            val uiState by viewModel.homeUiState.collectAsState()
+            val account = uiState.accounts.find { it.id == accountId }
+            
+            if (account != null) {
+                CreateForexCryptoAccountScreen(
+                    accountId = accountId,
+                    onBackClick = { navController.popBackStack() },
+                    onSaveClick = { _, _, _, _, _ -> },
+                    onUpdateClick = { updatedAccount ->
+                        viewModel.updateAccount(updatedAccount)
+                        navController.popBackStack()
+                    },
+                    groups = uiState.accountGroups,
+                    budgets = uiState.budgets,
+                    accounts = uiState.accounts
+                )
+            }
         }
 
         composable(
@@ -365,7 +495,12 @@ fun NavGraph(navController: NavHostController) {
                     navController.navigate("add_transaction/$defaultAccountId/Expense?isScheduled=true")
                 },
                 onEditScheduled = { transaction ->
-                    navController.navigate("edit_transaction/${transaction.id}?isScheduled=true")
+                    if (transaction.id.startsWith("loan_payment_")) {
+                        val accountId = transaction.id.removePrefix("loan_payment_")
+                        navController.navigate("edit_loan_account/$accountId")
+                    } else {
+                        navController.navigate("edit_transaction/${transaction.id}?isScheduled=true")
+                    }
                 }
             )
         }

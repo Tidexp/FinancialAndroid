@@ -23,6 +23,10 @@ data class AccountEntity(
     val duration: String? = null,
     val startDate: String? = null,
     val firstDueDate: String? = null,
+    val paymentsMade: Int = 0,
+    val paymentAccountId: String? = null,
+    val paymentCategory: String? = null,
+    val paymentPayee: String? = null,
     // Investment specific
     val asOfDate: String? = null,
     // Forex specific

@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.financial.domain.model.Account
 import com.example.financial.domain.model.AccountGroup
 import com.example.financial.domain.model.Budget
 import androidx.compose.foundation.shape.CircleShape
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreateForexCryptoAccountScreen(
+    accountId: String? = null,
     onBackClick: () -> Unit,
     onSaveClick: (
         name: String,
@@ -31,22 +33,26 @@ fun CreateForexCryptoAccountScreen(
         additionalInfo: String,
         monitoredByBudgetId: String?
     ) -> Unit,
+    onUpdateClick: (Account) -> Unit = {},
     groups: List<AccountGroup> = emptyList(),
-    budgets: List<Budget> = emptyList()
+    budgets: List<Budget> = emptyList(),
+    accounts: List<Account> = emptyList()
 ) {
+    val existingAccount = remember(accountId, accounts) { accounts.find { it.id == accountId } }
+    
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Basic", "Advanced")
 
     // --- State Hoisting ---
-    var accountName by remember { mutableStateOf("") }
-    var currency by remember { mutableStateOf("USD (US Dollar)") }
+    var accountName by remember { mutableStateOf(existingAccount?.name ?: "") }
+    var currency by remember { mutableStateOf(existingAccount?.currency ?: "USD (US Dollar)") }
 
-    var additionalInfo by remember { mutableStateOf("") }
+    var additionalInfo by remember { mutableStateOf(existingAccount?.additionalInfo ?: "") }
     var includeInNetWorth by remember { mutableStateOf(true) }
     var includeInGroupBalance by remember { mutableStateOf(true) }
-    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var selectedGroupId by remember { mutableStateOf(existingAccount?.groupId) }
     var showGroupPicker by remember { mutableStateOf(false) }
-    var selectedBudgetId by remember { mutableStateOf<String?>(null) }
+    var selectedBudgetId by remember { mutableStateOf(existingAccount?.monitoredByBudgetId) }
     var showBudgetPicker by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -69,7 +75,17 @@ fun CreateForexCryptoAccountScreen(
                     Button(
                         onClick = {
                             if (accountName.isNotBlank()) {
-                                onSaveClick(accountName, currency, selectedGroupId, additionalInfo, selectedBudgetId)
+                                if (existingAccount != null) {
+                                    onUpdateClick(existingAccount.copy(
+                                        name = accountName,
+                                        currency = currency,
+                                        groupId = selectedGroupId,
+                                        additionalInfo = additionalInfo,
+                                        monitoredByBudgetId = selectedBudgetId
+                                    ))
+                                } else {
+                                    onSaveClick(accountName, currency, selectedGroupId, additionalInfo, selectedBudgetId)
+                                }
                             }
                         },
                         shape = RoundedCornerShape(50),
