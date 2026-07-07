@@ -47,9 +47,9 @@ class FinancialRepository(
             val timePassed = now - budget.startDate
             val periodsPassed = if (timePassed > 0) (timePassed / periodMillis).toInt() else 0
             val currentPeriodStart = budget.startDate + (periodsPassed * periodMillis)
-            
+
             val spentInCurrentPeriod = relevantTransactions.filter { it.date >= currentPeriodStart }.sumOf { it.amount }
-            
+
             var rollover = 0.0
             if (budget.rolloverEnabled && periodsPassed > 0) {
                 val pastSpent = relevantTransactions.filter { it.date >= budget.startDate && it.date < currentPeriodStart }.sumOf { it.amount }
@@ -77,6 +77,8 @@ class FinancialRepository(
     fun getCategorySpending(): Flow<List<CategorySpending>> = flowOf(emptyList())
 
     suspend fun addTransaction(t: Transaction) { transactionDao.insertTransaction(t.toEntity()) }
+    suspend fun updateTransaction(t: Transaction) { transactionDao.insertTransaction(t.toEntity()) }
+    suspend fun deleteTransaction(t: Transaction) { transactionDao.deleteTransaction(t.toEntity()) }
     suspend fun addAccount(a: Account) { accountDao.insertAccount(a.toEntity()) }
     suspend fun updateAccount(a: Account) { accountDao.updateAccount(a.toEntity()) }
     suspend fun deleteAccount(a: Account) { accountDao.deleteAccount(a.toEntity()) }

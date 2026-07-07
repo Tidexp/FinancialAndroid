@@ -10,10 +10,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -44,7 +44,7 @@ fun BudgetsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showAddMenu by remember { mutableStateOf(false) }
     var sortByName by remember { mutableStateOf(true) }
-    
+
     var budgetToDelete by remember { mutableStateOf<Budget?>(null) }
     var budgetForOptions by remember { mutableStateOf<Budget?>(null) }
 
@@ -215,7 +215,7 @@ fun BudgetsScreen(
                 val budgetsInGroup = filteredBudgets.filter { it.budgetGroupId == group.id }
                 items(budgetsInGroup) { budget ->
                     BudgetItem(
-                        budget = budget, 
+                        budget = budget,
                         onClick = { onBudgetClick(budget.id) },
                         onLongClick = { budgetForOptions = it }
                     )
@@ -236,7 +236,7 @@ fun BudgetsScreen(
                 }
                 items(unGroupedBudgets) { budget ->
                     BudgetItem(
-                        budget = budget, 
+                        budget = budget,
                         onClick = { onBudgetClick(budget.id) },
                         onLongClick = { budgetForOptions = it }
                     )
@@ -255,21 +255,21 @@ fun BudgetsScreen(
             Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
                 Text(budgetForOptions!!.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 ListItem(
-                    modifier = Modifier.clickable { 
+                    modifier = Modifier.clickable {
                         val id = budgetForOptions!!.id
                         budgetForOptions = null
-                        onEditBudgetClick(id) 
+                        onEditBudgetClick(id)
                     },
                     headlineContent = { Text("Edit Budget") },
                     leadingContent = { Icon(Icons.Default.Edit, null) }
                 )
-                
+
                 ListItem(
-                    modifier = Modifier.clickable { 
+                    modifier = Modifier.clickable {
                         budgetToDelete = budgetForOptions
-                        budgetForOptions = null 
+                        budgetForOptions = null
                     },
                     headlineContent = { Text("Delete Budget", color = MaterialTheme.colorScheme.error) },
                     leadingContent = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }

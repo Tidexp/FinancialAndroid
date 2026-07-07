@@ -46,7 +46,7 @@ fun IncomeScreen(
     var status by remember { mutableStateOf(TransactionStatus.CLEARED) }
     var transactionDate by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var isAutoPay by remember { mutableStateOf(false) }
-    
+
     var frequency by remember { mutableStateOf("Once") }
     var weekendStrategy by remember { mutableStateOf("No change") }
     var endCondition by remember { mutableStateOf("Never") }
@@ -59,7 +59,7 @@ fun IncomeScreen(
     var showFrequencyPicker by remember { mutableStateOf(false) }
     var showWeekendPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
-    
+
     val datePickerState = rememberDatePickerState(initialSelectedDateMillis = transactionDate)
     val timePickerState = rememberTimePickerState(
         initialHour = Calendar.getInstance().apply { timeInMillis = transactionDate }.get(Calendar.HOUR_OF_DAY),
@@ -104,8 +104,8 @@ fun IncomeScreen(
         typeSelector = {}
     ) {
         ExpenseItem(
-            icon = Icons.Outlined.CreditCard, 
-            label = "Select Account", 
+            icon = Icons.Outlined.CreditCard,
+            label = "Select Account",
             value = selectedAccount?.name ?: "Select",
             onClick = { showAccountPicker = true }
         )

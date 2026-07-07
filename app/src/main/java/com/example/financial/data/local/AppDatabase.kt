@@ -17,7 +17,7 @@ import com.example.financial.data.local.entity.*
         BudgetEntity::class,
         BudgetGroupEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

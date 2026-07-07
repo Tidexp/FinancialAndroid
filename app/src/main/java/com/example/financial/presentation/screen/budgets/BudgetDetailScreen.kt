@@ -1,5 +1,6 @@
 package com.example.financial.presentation.screen.budgets
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,10 +8,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,10 +48,10 @@ fun BudgetDetailScreen(
     val periodsPassed = if (timePassed > 0) (timePassed / periodMillis).toInt() else 0
     val currentPeriodStart = budget.startDate + (periodsPassed * periodMillis)
     val currentPeriodEnd = currentPeriodStart + periodMillis
-    
+
     val remainingMillis = currentPeriodEnd - now
     val remainingDays = (remainingMillis / (24 * 3600000)).coerceAtLeast(1)
-    
+
     val dailyValue = if (remainingDays > 0) budget.remaining / remainingDays else 0.0
 
     Scaffold(
@@ -78,7 +81,7 @@ fun BudgetDetailScreen(
         ) {
             item {
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 // Progress Circle
                 Box(modifier = Modifier.size(200.dp), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(
@@ -113,30 +116,30 @@ fun BudgetDetailScreen(
                     Column(modifier = Modifier.padding(16.dp)) {
                         val label1 = if (budget.isIncome) "Saved" else "Used"
                         val label4 = if (budget.isIncome) "Daily goal" else "Daily Allowance"
-                        
+
                         BudgetDetailRow(label1, formatCurrency(budget.spent))
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
-                        
+
                         BudgetDetailRow("Remaining", formatCurrency(budget.remaining), isBold = true, color = if (budget.remaining < 0) Color.Red else Color(0xFF4CAF50))
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
-                        
+
                         BudgetDetailRow("Budgeted", formatCurrency(budget.amount))
                         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.5.dp, color = Color(0xFFEEEEEE))
-                        
+
                         BudgetDetailRow(label4, formatCurrency(dailyValue))
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Text(
                     text = "$remainingDays days remaining in this period",
                     color = Color.Gray,
                     fontSize = 14.sp
                 )
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
-                
+
                 Text(
                     text = "TRANSACTION HISTORY",
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -144,7 +147,7 @@ fun BudgetDetailScreen(
                     color = Color.Gray,
                     fontWeight = FontWeight.Bold
                 )
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
@@ -167,7 +170,7 @@ fun BudgetDetailScreen(
                     }
                 }
             }
-            
+
             item {
                 Spacer(modifier = Modifier.height(32.dp))
             }

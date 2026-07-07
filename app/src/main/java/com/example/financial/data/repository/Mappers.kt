@@ -29,7 +29,14 @@ fun TransactionEntity.toDomain(): Transaction {
         pricePerShare = pricePerShare,
         commission = commission,
         exchangeRate = exchangeRate,
-        budgetId = budgetId
+        recurrence = if (frequencyUnit != null) {
+            com.example.financial.domain.model.Recurrence(
+                frequencyValue = frequencyValue ?: 1,
+                frequencyUnit = frequencyUnit,
+                endType = endType ?: "Never",
+                endAfterCount = endAfterCount ?: 1
+            )
+        } else null
     )
 }
 
@@ -51,7 +58,10 @@ fun Transaction.toEntity(): TransactionEntity {
         pricePerShare = pricePerShare,
         commission = commission,
         exchangeRate = exchangeRate,
-        budgetId = budgetId
+        frequencyValue = recurrence?.frequencyValue,
+        frequencyUnit = recurrence?.frequencyUnit,
+        endType = recurrence?.endType,
+        endAfterCount = recurrence?.endAfterCount
     )
 }
 

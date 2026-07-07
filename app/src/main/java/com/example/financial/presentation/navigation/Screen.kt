@@ -22,6 +22,7 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object CreateBudget : Screen("create_budget/{isIncome}", "Create Budget", Icons.Default.Add)
     object EditBudget : Screen("edit_budget/{budgetId}", "Edit Budget", Icons.Default.Edit)
     object AddBudgetsGroup : Screen("add_budgets_group", "Add Budgets Group", Icons.Default.Add)
+    object EditTransaction : Screen("edit_transaction/{transactionId}?isScheduled={isScheduled}", "Edit Transaction", Icons.Default.Edit)
 }
 
 val bottomNavItems = listOf(

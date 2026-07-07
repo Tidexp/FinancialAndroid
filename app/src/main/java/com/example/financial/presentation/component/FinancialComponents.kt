@@ -245,10 +245,12 @@ fun AccountItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TransactionItem(
     transaction: Transaction,
     currentAccountId: String? = null,
+    onLongClick: (() -> Unit)? = null,
     onClick: (() -> Unit)? = null
 ) {
     val icon = when (transaction.type) {
@@ -289,7 +291,16 @@ fun TransactionItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .then(
+                if (onClick != null || onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick ?: {},
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -384,26 +395,26 @@ fun TransactionDetailSheet(
             DetailItem("Amount", String.format(Locale.getDefault(), "$%.2f", transaction.amount))
             DetailItem("Payee", transaction.payee ?: "-")
             DetailItem("Date", SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(transaction.date)))
-            
-            val accountName = if (transaction.fromAccountId.startsWith("budget_")) "Budget Virtual" 
+
+            val accountName = if (transaction.fromAccountId.startsWith("budget_")) "Budget Virtual"
                              else accounts.find { it.id == transaction.fromAccountId }?.name ?: "Unknown"
             DetailItem("Account", accountName)
-            
+
             if (transaction.budgetId != null) {
                 val budgetName = budgets.find { it.id == transaction.budgetId }?.name ?: "Unknown"
                 DetailItem("Linked Budget", budgetName)
             }
-            
+
             if (transaction.description?.isNotBlank() == true) {
                 DetailItem("Description", transaction.description)
             }
-            
+
             if (transaction.memo?.isNotBlank() == true) {
                 DetailItem("Memo", transaction.memo)
             }
 
             DetailItem("Status", transaction.status.name)
-            
+
             Spacer(modifier = Modifier.height(16.dp))
             Button(
                 onClick = onDismiss,

@@ -89,8 +89,223 @@ class FinancialViewModel(
         }
     }
 
-    // --- ACCOUNT METHODS (GIỮ NGUYÊN CODE CŨ CỦA BẠN) ---
-    
+    fun addAccountGroup(
+        name: String,
+        iconName: String?,
+        iconUri: String?,
+        color: androidx.compose.ui.graphics.Color,
+        accountIds: List<String> = emptyList()
+    ) {
+        viewModelScope.launch {
+            val groupId = java.util.UUID.randomUUID().toString()
+            val group = AccountGroup(
+                id = groupId,
+                name = name,
+                iconName = iconName,
+                iconUri = iconUri,
+                color = color
+            )
+            repository.addAccountGroup(group)
+
+            // Update selected accounts with the new groupId
+            if (accountIds.isNotEmpty()) {
+                val currentAccounts = _homeUiState.value.accounts
+                accountIds.forEach { id ->
+                    currentAccounts.find { it.id == id }?.let { account ->
+                        repository.updateAccount(account.copy(groupId = groupId))
+                    }
+                }
+            }
+        }
+    }
+
+    fun deleteAccountGroup(group: AccountGroup) {
+        viewModelScope.launch {
+            // Optional: Handle accounts belonging to this group (maybe set groupId to null)
+            repository.deleteAccountGroup(group)
+        }
+    }
+
+    fun addBudget(
+        name: String,
+        amount: Double,
+        isIncome: Boolean,
+        color: androidx.compose.ui.graphics.Color,
+        groupId: String? = null,
+        startDate: Long = System.currentTimeMillis(),
+        repeatEnabled: Boolean = true,
+        frequencyValue: Int = 1,
+        frequencyUnit: String = "month",
+        rolloverEnabled: Boolean = false,
+        accountIds: List<String> = emptyList(),
+        categories: List<String> = emptyList()
+    ) {
+        viewModelScope.launch {
+            val budget = Budget(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                amount = amount,
+                isIncome = isIncome,
+                color = color,
+                budgetGroupId = groupId,
+                startDate = startDate,
+                repeatEnabled = repeatEnabled,
+                frequencyValue = frequencyValue,
+                frequencyUnit = frequencyUnit,
+                rolloverEnabled = rolloverEnabled,
+                accountIds = accountIds,
+                categories = categories
+            )
+            repository.addBudget(budget)
+        }
+    }
+
+    fun addBudgetGroup(name: String, color: androidx.compose.ui.graphics.Color) {
+        viewModelScope.launch {
+            val group = BudgetGroup(
+                id = java.util.UUID.randomUUID().toString(),
+                name = name,
+                color = color
+            )
+            repository.addBudgetGroup(group)
+        }
+    }
+
+    fun deleteAccount(account: Account) {
+        viewModelScope.launch {
+            repository.deleteAccount(account)
+        }
+    }
+
+    fun updateAccount(account: Account) {
+        viewModelScope.launch {
+            repository.updateAccount(account)
+        }
+    }
+
+    fun updateAccountGroup(group: AccountGroup) {
+        viewModelScope.launch {
+            repository.updateAccountGroup(group)
+        }
+    }
+
+    fun updateAccountOrder(accounts: List<Account>) {
+        viewModelScope.launch {
+            accounts.forEachIndexed { index, account ->
+                repository.updateAccount(account.copy(orderIndex = index))
+            }
+        }
+    }
+
+    fun updateGroupOrder(groups: List<AccountGroup>) {
+        viewModelScope.launch {
+            groups.forEachIndexed { index, group ->
+                repository.updateAccountGroup(group.copy(orderIndex = index))
+            }
+        }
+    }
+
+    fun deleteTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            repository.deleteTransaction(transaction)
+
+            // If it was CLEARED, we might need to reverse the balance update.
+            // But for PLANNED (scheduled), we just delete it.
+            if (transaction.status != TransactionStatus.CLEARED) return@launch
+
+            val currentAccounts = _homeUiState.value.accounts
+            when (transaction.type) {
+                TransactionType.EXPENSE -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { account ->
+                        val newBalance = parseBalance(account.balance) + transaction.amount
+                        repository.updateAccount(account.copy(balance = formatBalance(newBalance)))
+                    }
+                }
+                TransactionType.INCOME -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { account ->
+                        val newBalance = parseBalance(account.balance) - transaction.amount
+                        repository.updateAccount(account.copy(balance = formatBalance(newBalance)))
+                    }
+                }
+                TransactionType.TRANSFER -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { fromAcc ->
+                        val newFromBalance = parseBalance(fromAcc.balance) + transaction.amount
+                        repository.updateAccount(fromAcc.copy(balance = formatBalance(newFromBalance)))
+                    }
+                    transaction.toAccountId?.let { toId ->
+                        currentAccounts.find { it.id == toId }?.let { toAcc ->
+                            val newToBalance = parseBalance(toAcc.balance) - transaction.amount
+                            repository.updateAccount(toAcc.copy(balance = formatBalance(newToBalance)))
+                        }
+                    }
+                }
+                TransactionType.ADJUSTMENT -> {
+                    // This is tricky because we don't know the previous balance
+                    // Maybe we shouldn't reverse adjustment directly without more info
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun payScheduledTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            // 1. Create a CLEARED transaction (the payment itself)
+            val payment = transaction.copy(
+                id = java.util.UUID.randomUUID().toString(),
+                status = TransactionStatus.CLEARED,
+                date = System.currentTimeMillis()
+            )
+            addTransaction(payment)
+
+            // 2. Reschedule the original one
+            rescheduleTransaction(transaction)
+        }
+    }
+
+    fun skipScheduledTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            rescheduleTransaction(transaction)
+        }
+    }
+
+    private suspend fun rescheduleTransaction(transaction: Transaction) {
+        val recurrence = transaction.recurrence
+        if (recurrence == null) {
+            // If no recurrence, this was a one-time scheduled transaction
+            repository.deleteTransaction(transaction)
+            return
+        }
+
+        // Calculate next date
+        val calendar = java.util.Calendar.getInstance()
+        calendar.timeInMillis = transaction.date
+
+        when (recurrence.frequencyUnit.lowercase()) {
+            "day" -> calendar.add(java.util.Calendar.DAY_OF_YEAR, recurrence.frequencyValue)
+            "week" -> calendar.add(java.util.Calendar.WEEK_OF_YEAR, recurrence.frequencyValue)
+            "month" -> calendar.add(java.util.Calendar.MONTH, recurrence.frequencyValue)
+            "year" -> calendar.add(java.util.Calendar.YEAR, recurrence.frequencyValue)
+            else -> calendar.add(java.util.Calendar.MONTH, recurrence.frequencyValue)
+        }
+
+        val nextTransaction = transaction.copy(date = calendar.timeInMillis)
+
+        // Update or Delete based on end criteria
+        if (recurrence.endType == "After") {
+            val remainingCount = recurrence.endAfterCount - 1
+            if (remainingCount <= 0) {
+                repository.deleteTransaction(transaction)
+            } else {
+                repository.addTransaction(nextTransaction.copy(
+                    recurrence = recurrence.copy(endAfterCount = remainingCount)
+                ))
+            }
+        } else {
+            repository.addTransaction(nextTransaction)
+        }
+    }
+
     fun addTransaction(transaction: Transaction) {
         viewModelScope.launch {
             repository.addTransaction(transaction)
@@ -100,10 +315,10 @@ class FinancialViewModel(
 
             val currentAccounts = _homeUiState.value.accounts
             val account = currentAccounts.find { it.id == transaction.fromAccountId }
-            
+
             if (account != null) {
                 var newBalance = parseBalance(account.balance)
-                
+
                 when (transaction.type) {
                     TransactionType.EXPENSE, TransactionType.BUY -> {
                         newBalance -= transaction.amount
@@ -136,11 +351,11 @@ class FinancialViewModel(
     }
 
     // --- BUDGET METHODS (PHẦN LÀM MỚI TÁCH BIỆT) ---
-    
+
     fun deleteBudget(budget: Budget) {
         viewModelScope.launch { repository.deleteBudget(budget) }
     }
-    
+
     fun updateBudget(budget: Budget) {
         viewModelScope.launch { repository.updateBudget(budget) }
     }
@@ -153,7 +368,7 @@ class FinancialViewModel(
             if (fromB != null && toB != null) {
                 repository.updateBudget(fromB.copy(amount = fromB.amount - amount))
                 repository.updateBudget(toB.copy(amount = toB.amount + amount))
-                
+
                 // Lưu lịch sử CHỈ cho budget
                 addTransaction(Transaction(
                     id = java.util.UUID.randomUUID().toString(),
@@ -168,35 +383,10 @@ class FinancialViewModel(
             }
         }
     }
-
-    fun addAccountGroup(name: String, iconName: String?, iconUri: String?, color: androidx.compose.ui.graphics.Color, accountIds: List<String> = emptyList()) {
-        viewModelScope.launch {
-            val groupId = java.util.UUID.randomUUID().toString()
-            repository.addAccountGroup(AccountGroup(id = groupId, name = name, iconName = iconName, iconUri = iconUri, color = color))
-        }
-    }
-
-    fun addBudget(name: String, amount: Double, isIncome: Boolean, color: androidx.compose.ui.graphics.Color, groupId: String? = null, startDate: Long = System.currentTimeMillis(), repeat: Boolean = true, freqV: Int = 1, freqU: String = "month", rollover: Boolean = false, accountIds: List<String> = emptyList(), categories: List<String> = emptyList()) {
-        viewModelScope.launch {
-            repository.addBudget(Budget(id = java.util.UUID.randomUUID().toString(), name = name, amount = amount, isIncome = isIncome, color = color, budgetGroupId = groupId, startDate = startDate, repeatEnabled = repeat, frequencyValue = freqV, frequencyUnit = freqU, rolloverEnabled = rollover, accountIds = accountIds, categories = categories))
-        }
-    }
-
-    fun addBudgetGroup(name: String, color: androidx.compose.ui.graphics.Color) {
-        viewModelScope.launch { repository.addBudgetGroup(BudgetGroup(id = java.util.UUID.randomUUID().toString(), name = name, color = color)) }
-    }
-
-    fun deleteAccount(account: Account) { viewModelScope.launch { repository.deleteAccount(account) } }
-    fun updateAccount(account: Account) { viewModelScope.launch { repository.updateAccount(account) } }
-    fun deleteAccountGroup(group: AccountGroup) { viewModelScope.launch { repository.deleteAccountGroup(group) } }
-    fun updateAccountGroup(group: AccountGroup) { viewModelScope.launch { repository.updateAccountGroup(group) } }
-    fun updateAccountOrder(accounts: List<Account>) { viewModelScope.launch { accounts.forEachIndexed { i, a -> repository.updateAccount(a.copy(orderIndex = i)) } } }
-    fun updateGroupOrder(groups: List<AccountGroup>) { viewModelScope.launch { groups.forEachIndexed { i, g -> repository.updateAccountGroup(g.copy(orderIndex = i)) } } }
-
     fun addCreditAccount(name: String, balance: String, limit: String, icon: String?, day: String, auto: Boolean, info: String, gId: String?, mId: String? = null) {
         viewModelScope.launch { repository.addAccount(Account(id = java.util.UUID.randomUUID().toString(), name = name, balance = balance, type = AccountType.CREDIT, color = androidx.compose.ui.graphics.Color(0xFFE91E63), iconUri = icon, creditLimit = limit, statementCloseDay = day, autoClear = auto, additionalInfo = info, groupId = gId, monitoredByBudgetId = mId)) }
     }
-    
+
     fun addLoanAccount(name: String, princ: String, apr: String, dur: String, start: String, first: String, gId: String?, info: String, mId: String? = null) {
         viewModelScope.launch { repository.addAccount(Account(id = java.util.UUID.randomUUID().toString(), name = name, balance = "-$princ", type = AccountType.LOAN, color = androidx.compose.ui.graphics.Color(0xFF4CAF50), principalAmount = princ, apr = apr, duration = dur, startDate = start, firstDueDate = first, groupId = gId, additionalInfo = info, monitoredByBudgetId = mId)) }
     }
