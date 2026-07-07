@@ -12,6 +12,8 @@ import androidx.navigation.navArgument
 import com.example.financial.presentation.screen.accounts.AccountsScreen
 import com.example.financial.presentation.screen.accounts.setup.*
 import com.example.financial.presentation.screen.budgets.BudgetsScreen
+import com.example.financial.presentation.screen.budgets.BudgetDetailScreen
+import com.example.financial.presentation.screen.budgets.AddBudgetTransactionScreen
 import com.example.financial.presentation.screen.budgets.setup.*
 import com.example.financial.presentation.screen.reports.ReportsScreen
 import com.example.financial.presentation.screen.scheduled.ScheduledScreen
@@ -71,9 +73,6 @@ fun NavGraph(navController: NavHostController) {
                         }
                         AccountType.FOREX -> {
                             navController.navigate("create_forex_crypto_account")
-                        }
-                        else -> {
-                            // Các loại khác như LOAN, INVESTMENT
                         }
                     }
                 }
@@ -184,6 +183,8 @@ fun NavGraph(navController: NavHostController) {
                     transactions = uiState.transactions.filter { 
                         it.fromAccountId == account.id || it.toAccountId == account.id 
                     },
+                    allAccounts = uiState.accounts,
+                    allBudgets = uiState.budgets,
                     onBackClick = { navController.popBackStack() },
                     onDeleteClick = {
                         viewModel.deleteAccount(it)
@@ -224,40 +225,124 @@ fun NavGraph(navController: NavHostController) {
             BudgetsScreen(
                 viewModel = viewModel,
                 onAddExpenseBudgetClick = {
-                    navController.navigate(Screen.AddExpenseBudget.route)
+                    navController.navigate("create_budget/false")
                 },
                 onAddIncomeBudgetClick = {
-                    navController.navigate(Screen.AddIncomeBudget.route)
+                    navController.navigate("create_budget/true")
                 },
                 onAddBudgetsGroupClick = {
                     navController.navigate(Screen.AddBudgetsGroup.route)
+                },
+                onBudgetClick = { budgetId ->
+                    navController.navigate("budget_detail/$budgetId")
+                },
+                onEditBudgetClick = { budgetId ->
+                    navController.navigate("edit_budget/$budgetId")
                 }
             )
         }
 
-        composable(Screen.AddExpenseBudget.route) {
+        composable(
+            route = "budget_detail/{budgetId}",
+            arguments = listOf(navArgument("budgetId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val budgetId = backStackEntry.arguments?.getString("budgetId")
             val uiState by viewModel.homeUiState.collectAsState()
-            CreateExpenseBudgetScreen(
-                onCloseClick = { navController.popBackStack() },
-                onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover, accountIds, categories ->
-                    viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover, accountIds, categories)
-                    navController.popBackStack()
-                },
-                budgetGroups = uiState.budgetGroups,
-                accounts = uiState.accounts
+            val budget = uiState.budgets.find { it.id == budgetId }
+
+            if (budget != null) {
+                // Determine duration of a period in millis for filtering
+                val periodMillis: Long = when (budget.frequencyUnit.lowercase()) {
+                    "day" -> 24L * 60 * 60 * 1000
+                    "week" -> 7L * 24 * 60 * 60 * 1000
+                    "month" -> 30L * 24 * 60 * 60 * 1000
+                    "year" -> 365L * 24 * 60 * 60 * 1000
+                    else -> 30L * 24 * 60 * 60 * 1000
+                }
+                val now = System.currentTimeMillis()
+                val timePassed = now - budget.startDate
+                val periodsPassed = if (timePassed > 0) (timePassed / periodMillis).toInt() else 0
+                val currentPeriodStart = budget.startDate + (periodsPassed * periodMillis)
+
+                val budgetTransactions = uiState.transactions.filter { transaction ->
+                    // 1. Ưu tiên giao dịch được gắn trực tiếp vào budget này
+                    if (transaction.budgetId == budget.id) return@filter true
+                    // 2. Không hiển thị giao dịch ảo của budget khác
+                    if (transaction.budgetId != null) return@filter false
+                    
+                    // 3. Hiển thị giao dịch thật khớp tiêu chí
+                    val typeMatch = transaction.type == (if (budget.isIncome) com.example.financial.domain.model.TransactionType.INCOME else com.example.financial.domain.model.TransactionType.EXPENSE)
+                    val accountMatch = budget.accountIds.isEmpty() || budget.accountIds.contains(transaction.fromAccountId)
+                    val categoryMatch = budget.categories.isEmpty() || budget.categories.any { it.equals(transaction.payee, ignoreCase = true) || it.equals(transaction.description, ignoreCase = true) }
+                    val dateMatch = transaction.date >= currentPeriodStart
+                    
+                    typeMatch && accountMatch && categoryMatch && dateMatch
+                }
+
+                BudgetDetailScreen(
+                    budget = budget,
+                    transactions = budgetTransactions,
+                    allAccounts = uiState.accounts,
+                    allBudgets = uiState.budgets,
+                    onBackClick = { navController.popBackStack() },
+                    onAddTransactionClick = {
+                        navController.navigate("add_budget_transaction/${budget.id}")
+                    }
+                )
+            }
+        }
+
+        composable(
+            route = "add_budget_transaction/{budgetId}",
+            arguments = listOf(navArgument("budgetId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val budgetId = backStackEntry.arguments?.getString("budgetId")
+            if (budgetId != null) {
+                AddBudgetTransactionScreen(
+                    viewModel = viewModel,
+                    budgetId = budgetId,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
+        }
+
+        composable(
+            route = Screen.CreateBudget.route,
+            arguments = listOf(navArgument("isIncome") { type = NavType.BoolType })
+        ) { backStackEntry ->
+            val isIncome = backStackEntry.arguments?.getBoolean("isIncome") ?: false
+            CreateBudgetScreen(
+                viewModel = viewModel,
+                initialIsIncome = isIncome,
+                onCloseClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.AddExpenseBudget.route) {
+            CreateBudgetScreen(
+                viewModel = viewModel,
+                initialIsIncome = false,
+                onCloseClick = { navController.popBackStack() }
             )
         }
 
         composable(Screen.AddIncomeBudget.route) {
-            val uiState by viewModel.homeUiState.collectAsState()
-            CreateIncomeBudgetScreen(
-                onCloseClick = { navController.popBackStack() },
-                onSaveClick = { name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover, accountIds, categories ->
-                    viewModel.addBudget(name, amount, isIncome, color, groupId, start, repeat, freqV, freqU, rollover, accountIds, categories)
-                    navController.popBackStack()
-                },
-                budgetGroups = uiState.budgetGroups,
-                accounts = uiState.accounts
+            CreateBudgetScreen(
+                viewModel = viewModel,
+                initialIsIncome = true,
+                onCloseClick = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = "edit_budget/{budgetId}",
+            arguments = listOf(navArgument("budgetId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val budgetId = backStackEntry.arguments?.getString("budgetId")
+            CreateBudgetScreen(
+                viewModel = viewModel,
+                budgetId = budgetId,
+                onCloseClick = { navController.popBackStack() }
             )
         }
 

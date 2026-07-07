@@ -36,11 +36,19 @@ class MainActivity : ComponentActivity() {
 fun MainApp() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = navBackStackEntry?.destination
 
     NavigationSuiteScaffold(
         navigationSuiteItems = {
             bottomNavItems.forEach { screen ->
+                val rootRoute = screen.route
+                // Kiểm tra xem màn hình hiện tại có thuộc về tab này không (dựa trên route string)
+                val currentRoute = navBackStackEntry?.destination?.route ?: ""
+                val isTabActive = when (rootRoute) {
+                    "accounts" -> currentRoute == "accounts" || currentRoute.contains("account", ignoreCase = true) || currentRoute == "select_account_type"
+                    "budgets" -> currentRoute == "budgets" || currentRoute.contains("budget", ignoreCase = true)
+                    else -> currentRoute == rootRoute
+                }
+
                 item(
                     icon = {
                         Icon(
@@ -49,22 +57,41 @@ fun MainApp() {
                         )
                     },
                     label = { Text(screen.label) },
-                    selected = currentDestination?.hierarchy?.any { 
-                        it.route?.contains(screen.route, ignoreCase = true) == true 
-                    } == true,
+                    selected = isTabActive,
                     onClick = {
-                        navController.navigate(screen.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                        if (isTabActive) {
+                            // Nếu nhấn lại vào Tab đang active và không phải ở màn hình gốc, quay về gốc
+                            if (currentRoute != rootRoute) {
+                                try {
+                                    // Thử pop về root của tab
+                                    navController.popBackStack(rootRoute, inclusive = false)
+                                } catch (e: Exception) {
+                                    // Fallback
+                                    navController.navigate(rootRoute) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }
                             }
-                            launchSingleTop = true
-                            restoreState = true
+                        } else {
+                            // Chuyển sang Tab mới
+                            navController.navigate(rootRoute) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
                     }
                 )
             }
         }
-    ) {
+    )
+{
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background

@@ -27,6 +27,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.financial.domain.model.Account
+import com.example.financial.domain.model.Budget
 import com.example.financial.domain.model.BudgetGroup
 import java.text.SimpleDateFormat
 import java.util.*
@@ -34,6 +35,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CreateIncomeBudgetScreen(
+    initialBudget: Budget? = null,
     onCloseClick: () -> Unit,
     onSaveClick: (
         name: String,
@@ -50,84 +52,49 @@ fun CreateIncomeBudgetScreen(
         categories: List<String>
     ) -> Unit,
     budgetGroups: List<BudgetGroup> = emptyList(),
-    accounts: List<Account> = emptyList()
+    accounts: List<Account> = emptyList(),
+    showHeader: Boolean = true
 ) {
     // --- States ---
-    var budgetName by remember { mutableStateOf("") }
-    var amountText by remember { mutableStateOf("0.00") }
-    var selectedColor by remember { mutableStateOf(Color(0xFF4CAF50)) }
-    var selectedGroupId by remember { mutableStateOf<String?>(null) }
+    var budgetName by remember { mutableStateOf(initialBudget?.name ?: "") }
+    var amountText by remember { mutableStateOf(String.format(Locale.getDefault(), "%.2f", initialBudget?.amount ?: 0.0)) }
+    var selectedColor by remember { mutableStateOf(initialBudget?.color ?: Color(0xFF4CAF50)) }
+    var selectedGroupId by remember { mutableStateOf<String?>(initialBudget?.budgetGroupId) }
     var showGroupPicker by remember { mutableStateOf(false) }
     
-    var startDate by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var startDate by remember { mutableLongStateOf(initialBudget?.startDate ?: System.currentTimeMillis()) }
     var showStartDatePicker by remember { mutableStateOf(false) }
     val startDatePickerState = rememberDatePickerState(initialSelectedDateMillis = startDate)
 
-    var endDate by remember { mutableLongStateOf(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000) }
+    var endDate by remember { 
+        mutableLongStateOf(initialBudget?.startDate?.let { it + 30L * 24 * 60 * 60 * 1000 } ?: (System.currentTimeMillis() + 30L * 24 * 60 * 60 * 1000)) 
+    }
     var showEndDatePicker by remember { mutableStateOf(false) }
     val endDatePickerState = rememberDatePickerState(initialSelectedDateMillis = endDate)
 
     val dateFormatter = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
 
-    var repeatEnabled by remember { mutableStateOf(false) }
-    var frequencyUnit by remember { mutableStateOf("month") }
+    var repeatEnabled by remember { mutableStateOf(initialBudget?.repeatEnabled ?: false) }
+    var frequencyUnit by remember { mutableStateOf(initialBudget?.frequencyUnit ?: "month") }
     var showFrequencyPicker by remember { mutableStateOf(false) }
 
-    var rolloverEnabled by remember { mutableStateOf(false) }
+    var rolloverEnabled by remember { mutableStateOf(initialBudget?.rolloverEnabled ?: false) }
 
-    val selectedAccountIds = remember { mutableStateListOf<String>() }
+    val selectedAccountIds = remember { 
+        val list = mutableStateListOf<String>()
+        initialBudget?.accountIds?.let { list.addAll(it) }
+        list
+    }
     var showAccountPicker by remember { mutableStateOf(false) }
 
-    val categoryList = remember { mutableStateListOf<String>() }
+    val categoryList = remember { 
+        val list = mutableStateListOf<String>()
+        initialBudget?.categories?.let { list.addAll(it) }
+        list
+    }
     var categoryInput by remember { mutableStateOf("") }
 
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = {
-                    Text(
-                        "New Income Budget",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onCloseClick) {
-                        Icon(Icons.Default.Close, contentDescription = "Close")
-                    }
-                },
-                actions = {
-                    Button(
-                        onClick = {
-                            if (budgetName.isNotBlank()) {
-                                onSaveClick(
-                                    budgetName,
-                                    amountText.toDoubleOrNull() ?: 0.0,
-                                    true,
-                                    selectedColor,
-                                    selectedGroupId,
-                                    startDate,
-                                    repeatEnabled,
-                                    1, 
-                                    frequencyUnit,
-                                    rolloverEnabled,
-                                    selectedAccountIds.toList(),
-                                    categoryList.toList()
-                                )
-                            }
-                        },
-                        shape = RoundedCornerShape(50),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
-                        contentPadding = PaddingValues(horizontal = 24.dp)
-                    ) {
-                        Text("Save", fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-            )
-        },
-        containerColor = Color(0xFFF8F9FA)
-    ) { padding ->
+    val content = @Composable { padding: PaddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -327,128 +294,245 @@ fun CreateIncomeBudgetScreen(
                     trailingContent = { Text("End date", color = Color.Gray, fontSize = 14.sp) }
                 )
             }
-            Spacer(modifier = Modifier.height(32.dp))
-        }
 
-        if (showGroupPicker) {
-            ModalBottomSheet(onDismissRequest = { showGroupPicker = false }) {
-                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
-                    Text("Select Budget Group", style = MaterialTheme.typography.titleLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    ListItem(
-                        modifier = Modifier.clickable { 
-                            selectedGroupId = null
-                            showGroupPicker = false 
-                        },
-                        headlineContent = { Text("None") }
-                    )
-                    budgetGroups.forEach { group ->
-                        ListItem(
-                            modifier = Modifier.clickable { 
-                                selectedGroupId = group.id
-                                showGroupPicker = false 
-                            },
-                            headlineContent = { Text(group.name) }
+            BudgetSectionHeader("Rollover settings")
+            BudgetCard {
+                ListItem(
+                    leadingContent = {
+                        Icon(
+                            Icons.Default.Sync,
+                            contentDescription = null,
+                            tint = Color.Gray
+                        )
+                    },
+                    headlineContent = {
+                        Text(
+                            "Rollover surplus balance",
+                            fontWeight = FontWeight.Normal
+                        )
+                    },
+                    supportingContent = {
+                        Text(
+                            "Automatically carry over excess income from the previous budget period.",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = rolloverEnabled,
+                            onCheckedChange = { rolloverEnabled = it },
+                            colors = SwitchDefaults.colors(checkedTrackColor = Color(0xFF4CAF50))
                         )
                     }
-                }
+                )
             }
-        }
 
-        if (showAccountPicker) {
-            ModalBottomSheet(onDismissRequest = { showAccountPicker = false }) {
-                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
-                    Text("Select Accounts", style = MaterialTheme.typography.titleLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                        items(accounts) { account ->
-                            val isSelected = selectedAccountIds.contains(account.id)
-                            ListItem(
-                                modifier = Modifier.clickable {
-                                    if (isSelected) selectedAccountIds.remove(account.id)
-                                    else selectedAccountIds.add(account.id)
-                                },
-                                leadingContent = {
-                                    Checkbox(checked = isSelected, onCheckedChange = null)
-                                },
-                                headlineContent = { Text(account.name) },
-                                trailingContent = {
-                                    Box(modifier = Modifier.size(24.dp).background(account.color, CircleShape))
-                                }
+            if (!showHeader) {
+                Spacer(modifier = Modifier.height(32.dp))
+                Button(
+                    onClick = {
+                        if (budgetName.isNotBlank()) {
+                            onSaveClick(
+                                budgetName,
+                                amountText.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                true,
+                                selectedColor,
+                                selectedGroupId,
+                                startDate,
+                                repeatEnabled,
+                                1,
+                                frequencyUnit,
+                                rolloverEnabled,
+                                selectedAccountIds.toList(),
+                                categoryList.toList()
                             )
                         }
-                    }
-                    Button(
-                        onClick = { showAccountPicker = false },
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                        shape = RoundedCornerShape(50)
-                    ) {
-                        Text("Done")
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6))
+                ) {
+                    Text(if (initialBudget != null) "Update Budget" else "Save Budget", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+
+    if (showHeader) {
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            if (initialBudget != null) "Edit Income Budget" else "New Income Budget",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onCloseClick) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    },
+                    actions = {
+                        Button(
+                            onClick = {
+                                if (budgetName.isNotBlank()) {
+                                    onSaveClick(
+                                        budgetName,
+                                        amountText.replace(",", ".").toDoubleOrNull() ?: 0.0,
+                                        true,
+                                        selectedColor,
+                                        selectedGroupId,
+                                        startDate,
+                                        repeatEnabled,
+                                        1, 
+                                        frequencyUnit,
+                                        rolloverEnabled,
+                                        selectedAccountIds.toList(),
+                                        categoryList.toList()
+                                    )
+                                }
+                            },
+                            shape = RoundedCornerShape(50),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
+                            contentPadding = PaddingValues(horizontal = 24.dp)
+                        ) {
+                            Text(if (initialBudget != null) "Update" else "Save", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
+                )
+            },
+            containerColor = Color(0xFFF8F9FA)
+        ) { padding ->
+            content(padding)
+        }
+    } else {
+        content(PaddingValues(0.dp))
+    }
+
+    if (showGroupPicker) {
+        ModalBottomSheet(onDismissRequest = { showGroupPicker = false }) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                Text("Select Budget Group", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(16.dp))
+                ListItem(
+                    modifier = Modifier.clickable { 
+                        selectedGroupId = null
+                        showGroupPicker = false 
+                    },
+                    headlineContent = { Text("None") }
+                )
+                budgetGroups.forEach { group ->
+                    ListItem(
+                        modifier = Modifier.clickable { 
+                            selectedGroupId = group.id
+                            showGroupPicker = false 
+                        },
+                        headlineContent = { Text(group.name) }
+                    )
                 }
             }
         }
+    }
 
-        if (showFrequencyPicker) {
-            val units = listOf("Day", "Week", "Month", "Year")
-            ModalBottomSheet(onDismissRequest = { showFrequencyPicker = false }) {
-                Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
-                    Text("Select Frequency", style = MaterialTheme.typography.titleLarge)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    units.forEach { unit ->
+    if (showAccountPicker) {
+        ModalBottomSheet(onDismissRequest = { showAccountPicker = false }) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                Text("Select Accounts", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(16.dp))
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
+                    items(accounts) { account ->
+                        val isSelected = selectedAccountIds.contains(account.id)
                         ListItem(
                             modifier = Modifier.clickable {
-                                frequencyUnit = unit.lowercase()
-                                showFrequencyPicker = false
+                                if (isSelected) selectedAccountIds.remove(account.id)
+                                else selectedAccountIds.add(account.id)
                             },
-                            headlineContent = { Text("Every 1 $unit") },
+                            leadingContent = {
+                                Checkbox(checked = isSelected, onCheckedChange = null)
+                            },
+                            headlineContent = { Text(account.name) },
                             trailingContent = {
-                                if (frequencyUnit == unit.lowercase()) {
-                                    Icon(Icons.Default.Check, null, tint = Color(0xFF3478F6))
-                                }
+                                Box(modifier = Modifier.size(24.dp).background(account.color, CircleShape))
                             }
                         )
                     }
                 }
+                Button(
+                    onClick = { showAccountPicker = false },
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                    shape = RoundedCornerShape(50)
+                ) {
+                    Text("Done")
+                }
             }
         }
+    }
 
-        if (showStartDatePicker) {
-            DatePickerDialog(
-                onDismissRequest = { showStartDatePicker = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        startDatePickerState.selectedDateMillis?.let {
-                            startDate = it
+    if (showFrequencyPicker) {
+        val units = listOf("Day", "Week", "Month", "Year")
+        ModalBottomSheet(onDismissRequest = { showFrequencyPicker = false }) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                Text("Select Frequency", style = MaterialTheme.typography.titleLarge)
+                Spacer(modifier = Modifier.height(16.dp))
+                units.forEach { unit ->
+                    ListItem(
+                        modifier = Modifier.clickable {
+                            frequencyUnit = unit.lowercase()
+                            showFrequencyPicker = false
+                        },
+                        headlineContent = { Text("Every 1 $unit") },
+                        trailingContent = {
+                            if (frequencyUnit == unit.lowercase()) {
+                                Icon(Icons.Default.Check, null, tint = Color(0xFF3478F6))
+                            }
                         }
-                        showStartDatePicker = false
-                    }) { Text("OK") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showStartDatePicker = false }) { Text("Cancel") }
+                    )
                 }
-            ) {
-                DatePicker(state = startDatePickerState)
             }
         }
+    }
 
-        if (showEndDatePicker) {
-            DatePickerDialog(
-                onDismissRequest = { showEndDatePicker = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        endDatePickerState.selectedDateMillis?.let {
-                            endDate = it
-                        }
-                        showEndDatePicker = false
-                    }) { Text("OK") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showEndDatePicker = false }) { Text("Cancel") }
-                }
-            ) {
-                DatePicker(state = endDatePickerState)
+    if (showStartDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showStartDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    startDatePickerState.selectedDateMillis?.let {
+                        startDate = it
+                    }
+                    showStartDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartDatePicker = false }) { Text("Cancel") }
             }
+        ) {
+            DatePicker(state = startDatePickerState)
+        }
+    }
+
+    if (showEndDatePicker) {
+        DatePickerDialog(
+            onDismissRequest = { showEndDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    endDatePickerState.selectedDateMillis?.let {
+                        endDate = it
+                    }
+                    showEndDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = endDatePickerState)
         }
     }
 }

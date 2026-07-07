@@ -20,8 +20,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 
 fun parseNumericInput(input: String): Double {
+// ... existing code ...
     return try {
         val normalized = input.replace(",", ".")
         val clean = normalized.replace(Regex("[^0-9.-]"), "")
@@ -39,7 +42,32 @@ fun parseNumericInput(input: String): Double {
 }
 
 @Composable
+fun <T> PickerSheetContent(
+    title: String,
+    items: List<T>,
+    labelProvider: (T) -> String,
+    iconProvider: (T) -> ImageVector,
+    colorProvider: (T) -> Color,
+    onSelect: (T) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp).padding(bottom = 32.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+        LazyColumn {
+            items(items) { item ->
+                ListItem(
+                    modifier = Modifier.clickable { onSelect(item) },
+                    headlineContent = { Text(labelProvider(item)) },
+                    leadingContent = { Icon(iconProvider(item), null, tint = colorProvider(item)) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
 fun TransactionTypeIcon(
+// ... existing code ...
     icon: ImageVector,
     isSelected: Boolean,
     selectedColor: Color = Color.Black,

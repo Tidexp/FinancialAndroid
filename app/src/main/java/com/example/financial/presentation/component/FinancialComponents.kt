@@ -2,6 +2,7 @@ package com.example.financial.presentation.component
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -245,7 +246,11 @@ fun AccountItem(
 }
 
 @Composable
-fun TransactionItem(transaction: Transaction, currentAccountId: String? = null) {
+fun TransactionItem(
+    transaction: Transaction,
+    currentAccountId: String? = null,
+    onClick: (() -> Unit)? = null
+) {
     val icon = when (transaction.type) {
         TransactionType.EXPENSE -> Icons.Default.RemoveCircleOutline
         TransactionType.INCOME -> Icons.Default.AddCircleOutline
@@ -284,6 +289,7 @@ fun TransactionItem(transaction: Transaction, currentAccountId: String? = null) 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -349,6 +355,77 @@ fun TransactionItem(transaction: Transaction, currentAccountId: String? = null) 
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TransactionDetailSheet(
+    transaction: Transaction,
+    accounts: List<Account>,
+    budgets: List<Budget>,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "Transaction Details",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
+            DetailItem("Type", transaction.type.name)
+            DetailItem("Amount", String.format(Locale.getDefault(), "$%.2f", transaction.amount))
+            DetailItem("Payee", transaction.payee ?: "-")
+            DetailItem("Date", SimpleDateFormat("dd MMM yyyy HH:mm", Locale.getDefault()).format(Date(transaction.date)))
+            
+            val accountName = if (transaction.fromAccountId.startsWith("budget_")) "Budget Virtual" 
+                             else accounts.find { it.id == transaction.fromAccountId }?.name ?: "Unknown"
+            DetailItem("Account", accountName)
+            
+            if (transaction.budgetId != null) {
+                val budgetName = budgets.find { it.id == transaction.budgetId }?.name ?: "Unknown"
+                DetailItem("Linked Budget", budgetName)
+            }
+            
+            if (transaction.description?.isNotBlank() == true) {
+                DetailItem("Description", transaction.description)
+            }
+            
+            if (transaction.memo?.isNotBlank() == true) {
+                DetailItem("Memo", transaction.memo)
+            }
+
+            DetailItem("Status", transaction.status.name)
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Close")
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailItem(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(text = label, color = Color.Gray)
+        Text(text = value, fontWeight = FontWeight.Medium)
     }
 }
 

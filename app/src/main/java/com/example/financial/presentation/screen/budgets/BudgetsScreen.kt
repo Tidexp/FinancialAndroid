@@ -1,5 +1,8 @@
 package com.example.financial.presentation.screen.budgets
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -7,14 +10,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -22,18 +29,24 @@ import com.example.financial.domain.model.Budget
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BudgetsScreen(
     viewModel: FinancialViewModel,
     onAddExpenseBudgetClick: () -> Unit,
     onAddIncomeBudgetClick: () -> Unit,
-    onAddBudgetsGroupClick: () -> Unit
+    onAddBudgetsGroupClick: () -> Unit,
+    onBudgetClick: (String) -> Unit,
+    onEditBudgetClick: (String) -> Unit
 ) {
     val uiState by viewModel.homeUiState.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var showAddMenu by remember { mutableStateOf(false) }
     var sortByName by remember { mutableStateOf(true) }
+    
+    var budgetToDelete by remember { mutableStateOf<Budget?>(null) }
+    var budgetForOptions by remember { mutableStateOf<Budget?>(null) }
 
     val filteredBudgets = remember(uiState.budgets, searchQuery, sortByName) {
         uiState.budgets.filter { budget ->
@@ -163,7 +176,7 @@ fun BudgetsScreen(
 
                 TextButton(onClick = { sortByName = !sortByName }) {
                     Icon(
-                        imageVector = Icons.Default.Sort,
+                        imageVector = Icons.AutoMirrored.Filled.Sort,
                         contentDescription = "Sort",
                         modifier = Modifier.size(18.dp)
                     )
@@ -201,7 +214,11 @@ fun BudgetsScreen(
                 }
                 val budgetsInGroup = filteredBudgets.filter { it.budgetGroupId == group.id }
                 items(budgetsInGroup) { budget ->
-                    BudgetItem(budget)
+                    BudgetItem(
+                        budget = budget, 
+                        onClick = { onBudgetClick(budget.id) },
+                        onLongClick = { budgetForOptions = it }
+                    )
                 }
             }
             
@@ -218,7 +235,11 @@ fun BudgetsScreen(
                     }
                 }
                 items(unGroupedBudgets) { budget ->
-                    BudgetItem(budget)
+                    BudgetItem(
+                        budget = budget, 
+                        onClick = { onBudgetClick(budget.id) },
+                        onLongClick = { budgetForOptions = it }
+                    )
                 }
             }
         }
@@ -227,12 +248,73 @@ fun BudgetsScreen(
             Spacer(modifier = Modifier.height(80.dp))
         }
     }
+
+    // Options Modal
+    if (budgetForOptions != null) {
+        ModalBottomSheet(onDismissRequest = { budgetForOptions = null }) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxWidth().padding(bottom = 32.dp)) {
+                Text(budgetForOptions!!.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                ListItem(
+                    modifier = Modifier.clickable { 
+                        val id = budgetForOptions!!.id
+                        budgetForOptions = null
+                        onEditBudgetClick(id) 
+                    },
+                    headlineContent = { Text("Edit Budget") },
+                    leadingContent = { Icon(Icons.Default.Edit, null) }
+                )
+                
+                ListItem(
+                    modifier = Modifier.clickable { 
+                        budgetToDelete = budgetForOptions
+                        budgetForOptions = null 
+                    },
+                    headlineContent = { Text("Delete Budget", color = MaterialTheme.colorScheme.error) },
+                    leadingContent = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                )
+            }
+        }
+    }
+
+    // Delete Confirmation
+    if (budgetToDelete != null) {
+        AlertDialog(
+            onDismissRequest = { budgetToDelete = null },
+            title = { Text("Delete Budget") },
+            text = { Text("Are you sure you want to delete '${budgetToDelete!!.name}'? This will not delete the associated transactions.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteBudget(budgetToDelete!!)
+                        budgetToDelete = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { budgetToDelete = null }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun BudgetItem(budget: Budget) {
+fun BudgetItem(budget: Budget, onClick: () -> Unit, onLongClick: (Budget) -> Unit = {}) {
+    val haptic = LocalHapticFeedback.current
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick(budget)
+                }
+            ),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)

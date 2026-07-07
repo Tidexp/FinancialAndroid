@@ -14,9 +14,13 @@ sealed class Screen(val route: String, val label: String, val icon: ImageVector)
     object CreateAccountGroup : Screen("create_account_group", "Create Account Group", Icons.Default.GroupAdd)
     object CreateAccount : Screen("create_account/{type}", "Create Account", Icons.Default.Add)
     object AccountDetail : Screen("account_detail/{accountId}", "Account Detail", Icons.Default.Info)
+    object BudgetDetail : Screen("budget_detail/{budgetId}", "Budget Detail", Icons.Default.Info)
+    object AddBudgetTransaction : Screen("add_budget_transaction/{budgetId}", "Add Budget Transaction", Icons.Default.Add)
     object AddTransaction : Screen("add_transaction/{accountId}/{type}?isScheduled={isScheduled}", "Add Transaction", Icons.Default.Add)
     object AddExpenseBudget : Screen("add_expense_budget", "Add Expense Budget", Icons.Default.Add)
     object AddIncomeBudget : Screen("add_income_budget", "Add Income Budget", Icons.Default.Add)
+    object CreateBudget : Screen("create_budget/{isIncome}", "Create Budget", Icons.Default.Add)
+    object EditBudget : Screen("edit_budget/{budgetId}", "Edit Budget", Icons.Default.Edit)
     object AddBudgetsGroup : Screen("add_budgets_group", "Add Budgets Group", Icons.Default.Add)
 }
 

@@ -25,5 +25,6 @@ data class TransactionEntity(
     val pricePerShare: Double? = null,
     val commission: Double? = null,
     val exchangeRate: Double? = null,
+    val budgetId: String? = null,
     val lastUpdated: Long = System.currentTimeMillis()
 )

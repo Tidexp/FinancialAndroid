@@ -28,7 +28,8 @@ fun TransactionEntity.toDomain(): Transaction {
         shares = shares,
         pricePerShare = pricePerShare,
         commission = commission,
-        exchangeRate = exchangeRate
+        exchangeRate = exchangeRate,
+        budgetId = budgetId
     )
 }
 
@@ -49,7 +50,8 @@ fun Transaction.toEntity(): TransactionEntity {
         shares = shares,
         pricePerShare = pricePerShare,
         commission = commission,
-        exchangeRate = exchangeRate
+        exchangeRate = exchangeRate,
+        budgetId = budgetId
     )
 }
 

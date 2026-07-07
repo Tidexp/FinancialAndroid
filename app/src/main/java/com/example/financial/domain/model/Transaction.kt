@@ -13,6 +13,7 @@ data class Transaction(
     val status: TransactionStatus = TransactionStatus.CLEARED,
     val memo: String? = null,
     val tags: List<String> = emptyList(),
+    val budgetId: String? = null, // Trường mới để tách biệt với Account
     // Investment/Forex
     val symbol: String? = null,
     val shares: Double? = null,

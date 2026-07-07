@@ -6,6 +6,7 @@ import com.example.financial.data.local.dao.TransactionDao
 import com.example.financial.domain.model.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import java.util.Calendar
 
@@ -17,267 +18,75 @@ class FinancialRepository(
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth
 ) {
-    private val userId: String
-        get() = auth.currentUser?.uid ?: "anonymous"
+    private val userId: String get() = auth.currentUser?.uid ?: "anonymous"
 
-    fun getTransactions(): Flow<List<Transaction>> = 
-        transactionDao.getAllTransactions().map { entities -> 
-            entities.map { it.toDomain() } 
-        }
+    fun getTransactions(): Flow<List<Transaction>> = transactionDao.getAllTransactions().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getAccounts(): Flow<List<Account>> = accountDao.getAllAccounts().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getAccountGroups(): Flow<List<AccountGroup>> = accountGroupDao.getAllGroups().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getBudgetGroups(): Flow<List<BudgetGroup>> = budgetDao.getAllBudgetGroups().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
 
-    fun getAccounts(): Flow<List<Account>> = 
-        accountDao.getAllAccounts().map { entities -> 
-            entities.map { it.toDomain() } 
-        }
-
-    fun getAccountGroups(): Flow<List<AccountGroup>> =
-        accountGroupDao.getAllGroups().map { entities ->
-            entities.map { it.toDomain() }
-        }
-
-    fun getBudgets(): Flow<List<Budget>> = 
-        combine(
-            budgetDao.getAllBudgets(),
-            getTransactions()
-        ) { entities, transactions ->
-            entities.map { entity ->
-                val budget = entity.toDomain()
+    fun getBudgets(): Flow<List<Budget>> = combine(budgetDao.getAllBudgets(), getTransactions()) { entities, allTransactions ->
+        entities.map { entity ->
+            val budget = entity.toDomain()
+            // Lọc giao dịch: Hoặc là giao dịch thật khớp account/category, hoặc là giao dịch ảo dành riêng cho budget này
+            val relevantTransactions = allTransactions.filter { t ->
+                if (t.budgetId == budget.id) return@filter true // Giao dịch ảo của budget
+                if (t.budgetId != null) return@filter false // Giao dịch ảo của budget khác
                 
-                // Filter transactions based on budget configuration
-                val relevantTransactions = transactions.filter { transaction ->
-                    val typeMatch = transaction.type == (if (budget.isIncome) TransactionType.INCOME else TransactionType.EXPENSE)
-                    val accountMatch = budget.accountIds.isEmpty() || budget.accountIds.contains(transaction.fromAccountId)
-                    val categoryMatch = budget.categories.isEmpty() || budget.categories.any { it.equals(transaction.payee, ignoreCase = true) || it.equals(transaction.description, ignoreCase = true) }
-                    
-                    typeMatch && accountMatch && categoryMatch
-                }
-
-                // Current Period Calculation
-                val now = System.currentTimeMillis()
-                val calendar = Calendar.getInstance()
-                calendar.timeInMillis = budget.startDate
-                
-                // Determine duration of a period in millis
-                val periodMillis: Long = when (budget.frequencyUnit.lowercase()) {
-                    "day" -> 24L * 60 * 60 * 1000
-                    "week" -> 7L * 24 * 60 * 60 * 1000
-                    "month" -> 30L * 24 * 60 * 60 * 1000 // Approximate
-                    "year" -> 365L * 24 * 60 * 60 * 1000 // Approximate
-                    else -> 30L * 24 * 60 * 60 * 1000
-                }
-
-                val timePassed = now - budget.startDate
-                val periodsPassed = if (timePassed > 0) (timePassed / periodMillis).toInt() else 0
-                val currentPeriodStart = budget.startDate + (periodsPassed * periodMillis)
-                
-                val spentInCurrentPeriod = relevantTransactions
-                    .filter { it.date >= currentPeriodStart }
-                    .sumOf { it.amount }
-                
-                // Rollover Logic: Total balance from all past periods
-                var rolloverAmount = 0.0
-                if (budget.rolloverEnabled && !budget.isIncome && periodsPassed > 0) {
-                    val pastTransactionsSpent = relevantTransactions
-                        .filter { it.date >= budget.startDate && it.date < currentPeriodStart }
-                        .sumOf { it.amount }
-                    val totalBudgetedPast = budget.amount * periodsPassed
-                    rolloverAmount = totalBudgetedPast - pastTransactionsSpent
-                }
-
-                val remaining = budget.amount - spentInCurrentPeriod + rolloverAmount
-                val progress = if (budget.amount > 0) (spentInCurrentPeriod / budget.amount).toFloat() else 0f
-                
-                budget.copy(
-                    spent = spentInCurrentPeriod,
-                    remaining = remaining,
-                    progress = progress.coerceIn(0f, 1f)
-                )
+                // Giao dịch thật
+                val typeMatch = t.type == (if (budget.isIncome) TransactionType.INCOME else TransactionType.EXPENSE)
+                val accMatch = budget.accountIds.isEmpty() || budget.accountIds.contains(t.fromAccountId)
+                val catMatch = budget.categories.isEmpty() || budget.categories.any { it.equals(t.payee, true) || it.equals(t.description, true) }
+                typeMatch && accMatch && catMatch
             }
-        }
 
-    fun getBudgetGroups(): Flow<List<BudgetGroup>> =
-        budgetDao.getAllBudgetGroups().map { entities ->
-            entities.map { it.toDomain() }
-        }
-
-    fun getBalanceData(): Flow<BalanceData> = flow {
-        combine(
-            getAccounts(),
-            getTransactions(),
-            getBudgets()
-        ) { accounts, transactions, budgets ->
-            var totalBalance = 0.0
-            var liabilities = 0.0
-            accounts.forEach { account ->
-                val b = parseBalance(account.balance)
-                if (b < 0) liabilities += kotlin.math.abs(b)
-                totalBalance += b
+            val now = System.currentTimeMillis()
+            val periodMillis: Long = when (budget.frequencyUnit.lowercase()) {
+                "day" -> 24L * 3600000; "week" -> 7L * 24 * 3600000; "year" -> 365L * 24 * 3600000; else -> 30L * 24 * 3600000
             }
+            val timePassed = now - budget.startDate
+            val periodsPassed = if (timePassed > 0) (timePassed / periodMillis).toInt() else 0
+            val currentPeriodStart = budget.startDate + (periodsPassed * periodMillis)
             
-            val totalIncome = transactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
-            val totalExpenses = transactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
-
-            // Calculate overall monthly budget progress
-            val expenseBudgets = budgets.filter { !it.isIncome }
-            val totalBudgetAmount = expenseBudgets.sumOf { it.amount }
-            val totalBudgetSpent = expenseBudgets.sumOf { it.spent }
+            val spentInCurrentPeriod = relevantTransactions.filter { it.date >= currentPeriodStart }.sumOf { it.amount }
             
-            val budgetProgress = if (totalBudgetAmount > 0) 
-                (totalBudgetSpent / totalBudgetAmount).toFloat().coerceIn(0f, 1f)
-            else 0f
-
-            BalanceData(
-                netWorth = formatBalance(totalBalance),
-                liabilities = formatBalance(-liabilities),
-                totalIncome = formatBalance(totalIncome),
-                totalExpenses = formatBalance(totalExpenses),
-                monthlyBudget = budgetProgress
-            )
-        }.collect { emit(it) }
-    }
-
-    private fun parseBalance(balance: String): Double {
-        return try {
-            val normalized = balance.replace(",", ".")
-            val clean = normalized.replace(Regex("[^0-9.-]"), "")
-            val lastDotIndex = clean.lastIndexOf('.')
-            if (lastDotIndex != -1) {
-                val integerPart = clean.substring(0, lastDotIndex).replace(".", "")
-                val fractionalPart = clean.substring(lastDotIndex + 1)
-                (integerPart + "." + fractionalPart).toDouble()
-            } else {
-                clean.toDouble()
+            var rollover = 0.0
+            if (budget.rolloverEnabled && periodsPassed > 0) {
+                val pastSpent = relevantTransactions.filter { it.date >= budget.startDate && it.date < currentPeriodStart }.sumOf { it.amount }
+                val pastBudgeted = budget.amount * periodsPassed
+                rollover = if (budget.isIncome) pastSpent - pastBudgeted else pastBudgeted - pastSpent
             }
-        } catch (e: Exception) {
-            0.0
-        }
-    }
 
-    private fun formatBalance(balance: Double): String {
-        return java.util.Locale.getDefault().let { locale ->
-            String.format(locale, "$%.2f", balance)
+            budget.copy(spent = spentInCurrentPeriod, remaining = budget.amount - spentInCurrentPeriod + rollover, progress = if (budget.amount > 0) (spentInCurrentPeriod / budget.amount).toFloat().coerceIn(0f, 1f) else 0f)
         }
-    }
+    }.flowOn(Dispatchers.Default)
+
+    fun getBalanceData(): Flow<BalanceData> = combine(getAccounts(), getTransactions()) { accounts, transactions ->
+        // Ở đây CHỈ lấy giao dịch thật (budgetId == null)
+        val realTransactions = transactions.filter { it.budgetId == null }
+        var total = 0.0; var liab = 0.0
+        accounts.forEach { a -> val b = parseBalance(a.balance); if (b < 0) liab += kotlin.math.abs(b); total += b }
+        val inc = realTransactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+        val exp = realTransactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+        BalanceData(netWorth = formatBalance(total), liabilities = formatBalance(-liab), totalIncome = formatBalance(inc), totalExpenses = formatBalance(exp), monthlyBudget = 0f)
+    }.flowOn(Dispatchers.Default)
+
+    private fun parseBalance(s: String): Double = try { s.replace(",", ".").replace(Regex("[^0-9.-]"), "").toDouble() } catch (e: Exception) { 0.0 }
+    private fun formatBalance(d: Double): String = String.format(java.util.Locale.getDefault(), "$%.2f", d)
 
     fun getCategorySpending(): Flow<List<CategorySpending>> = flowOf(emptyList())
 
-    suspend fun addTransaction(transaction: Transaction) {
-        // 1. Save to Room (Local)
-        transactionDao.insertTransaction(transaction.toEntity())
-        
-        // 2. Push to Firestore (Cloud) - Optional
-        try {
-            firestore.collection("users")
-                .document(userId)
-                .collection("transactions")
-                .document(transaction.id)
-                .set(transaction.toEntity())
-        } catch (e: Exception) {
-            android.util.Log.e("FinancialRepository", "Firestore error: ${e.message}")
-        }
-    }
-
-    suspend fun addAccount(account: Account) {
-        accountDao.insertAccount(account.toEntity())
-        
-        try {
-            firestore.collection("users")
-                .document(userId)
-                .collection("accounts")
-                .document(account.id)
-                .set(account.toEntity())
-        } catch (e: Exception) {
-            android.util.Log.e("FinancialRepository", "Firestore error: ${e.message}")
-        }
-    }
-
-    suspend fun updateAccount(account: Account) {
-        accountDao.updateAccount(account.toEntity())
-        try {
-            firestore.collection("users")
-                .document(userId)
-                .collection("accounts")
-                .document(account.id)
-                .set(account.toEntity())
-        } catch (e: Exception) {
-            android.util.Log.e("FinancialRepository", "Firestore update error: ${e.message}")
-        }
-    }
-
-    suspend fun deleteAccount(account: Account) {
-        accountDao.deleteAccount(account.toEntity())
-        try {
-            firestore.collection("users")
-                .document(userId)
-                .collection("accounts")
-                .document(account.id)
-                .delete()
-        } catch (e: Exception) {
-            android.util.Log.e("FinancialRepository", "Firestore delete error: ${e.message}")
-        }
-    }
-
-    suspend fun addAccountGroup(group: AccountGroup) {
-        accountGroupDao.insertGroup(group.toEntity())
-        
-        try {
-            firestore.collection("users")
-                .document(userId)
-                .collection("account_groups")
-                .document(group.id)
-                .set(group.toEntity())
-        } catch (e: Exception) {
-            android.util.Log.e("FinancialRepository", "Firestore error: ${e.message}")
-        }
-    }
-
-    suspend fun updateAccountGroup(group: AccountGroup) {
-        accountGroupDao.updateGroup(group.toEntity())
-        try {
-            firestore.collection("users")
-                .document(userId)
-                .collection("account_groups")
-                .document(group.id)
-                .set(group.toEntity())
-        } catch (e: Exception) {
-            android.util.Log.e("FinancialRepository", "Firestore group update error: ${e.message}")
-        }
-    }
-
-    suspend fun deleteAccountGroup(group: AccountGroup) {
-        accountGroupDao.deleteGroup(group.toEntity())
-        try {
-            firestore.collection("users")
-                .document(userId)
-                .collection("account_groups")
-                .document(group.id)
-                .delete()
-        } catch (e: Exception) {
-            android.util.Log.e("FinancialRepository", "Firestore group delete error: ${e.message}")
-        }
-    }
-
-    suspend fun addBudget(budget: Budget) {
-        budgetDao.insertBudget(budget.toEntity())
-    }
-
-    suspend fun updateBudget(budget: Budget) {
-        budgetDao.updateBudget(budget.toEntity())
-    }
-
-    suspend fun deleteBudget(budget: Budget) {
-        budgetDao.deleteBudget(budget.toEntity())
-    }
-
-    suspend fun addBudgetGroup(group: BudgetGroup) {
-        budgetDao.insertBudgetGroup(group.toEntity())
-    }
-
-    suspend fun updateBudgetGroup(group: BudgetGroup) {
-        budgetDao.updateBudgetGroup(group.toEntity())
-    }
-
-    suspend fun deleteBudgetGroup(group: BudgetGroup) {
-        budgetDao.deleteBudgetGroup(group.toEntity())
-    }
+    suspend fun addTransaction(t: Transaction) { transactionDao.insertTransaction(t.toEntity()) }
+    suspend fun addAccount(a: Account) { accountDao.insertAccount(a.toEntity()) }
+    suspend fun updateAccount(a: Account) { accountDao.updateAccount(a.toEntity()) }
+    suspend fun deleteAccount(a: Account) { accountDao.deleteAccount(a.toEntity()) }
+    suspend fun addAccountGroup(g: AccountGroup) { accountGroupDao.insertGroup(g.toEntity()) }
+    suspend fun updateAccountGroup(g: AccountGroup) { accountGroupDao.updateGroup(g.toEntity()) }
+    suspend fun deleteAccountGroup(g: AccountGroup) { accountGroupDao.deleteGroup(g.toEntity()) }
+    suspend fun addBudget(b: Budget) { budgetDao.insertBudget(b.toEntity()) }
+    suspend fun updateBudget(b: Budget) { budgetDao.updateBudget(b.toEntity()) }
+    suspend fun deleteBudget(b: Budget) { budgetDao.deleteBudget(b.toEntity()) }
+    suspend fun addBudgetGroup(g: BudgetGroup) { budgetDao.insertBudgetGroup(g.toEntity()) }
+    suspend fun updateBudgetGroup(g: BudgetGroup) { budgetDao.updateBudgetGroup(g.toEntity()) }
+    suspend fun deleteBudgetGroup(g: BudgetGroup) { budgetDao.deleteBudgetGroup(g.toEntity()) }
 }

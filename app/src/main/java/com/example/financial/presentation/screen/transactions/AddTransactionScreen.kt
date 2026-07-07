@@ -165,6 +165,7 @@ fun AddTransactionScreen(
                 "Expense" -> ExpenseScreen(
                     showHeader = false, 
                     account = account,
+                    allAccounts = uiState.accounts,
                     onSave = { transaction ->
                         viewModel.addTransaction(transaction)
                         onBackClick()
@@ -174,6 +175,7 @@ fun AddTransactionScreen(
                 "Income" -> IncomeScreen(
                     showHeader = false,
                     account = account,
+                    allAccounts = uiState.accounts,
                     onSave = { transaction ->
                         viewModel.addTransaction(transaction)
                         onBackClick()

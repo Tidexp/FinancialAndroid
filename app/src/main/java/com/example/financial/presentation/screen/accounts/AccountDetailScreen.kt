@@ -16,9 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.example.financial.domain.model.Account
-import com.example.financial.domain.model.AccountType
-import com.example.financial.domain.model.Transaction
+import com.example.financial.domain.model.*
+import com.example.financial.presentation.component.TransactionDetailSheet
 import com.example.financial.presentation.component.TransactionItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -27,11 +26,14 @@ fun AccountDetailScreen(
     account: Account,
     groupName: String?,
     transactions: List<Transaction> = emptyList(),
+    allAccounts: List<Account> = emptyList(),
+    allBudgets: List<Budget> = emptyList(),
     onBackClick: () -> Unit,
     onDeleteClick: (Account) -> Unit,
     onNavigateToTransaction: (type: String) -> Unit
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
 
     Scaffold(
         topBar = {
@@ -127,7 +129,11 @@ fun AccountDetailScreen(
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                         transactions.sortedByDescending { it.date }.forEachIndexed { index, transaction ->
-                            TransactionItem(transaction = transaction, currentAccountId = account.id)
+                            TransactionItem(
+                                transaction = transaction, 
+                                currentAccountId = account.id,
+                                onClick = { selectedTransaction = transaction }
+                            )
                             if (index < transactions.size - 1) {
                                 HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.3f))
                             }
@@ -142,6 +148,15 @@ fun AccountDetailScreen(
                     Text("No transactions yet", color = Color.Gray)
                 }
             }
+        }
+
+        selectedTransaction?.let { transaction ->
+            TransactionDetailSheet(
+                transaction = transaction,
+                accounts = allAccounts,
+                budgets = allBudgets,
+                onDismiss = { selectedTransaction = null }
+            )
         }
 
         if (showDeleteDialog) {
