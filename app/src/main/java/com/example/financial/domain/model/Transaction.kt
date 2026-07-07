@@ -19,6 +19,14 @@ data class Transaction(
     val pricePerShare: Double? = null,
     val commission: Double? = null,
     val exchangeRate: Double? = null,
+    val recurrence: Recurrence? = null
+)
+
+data class Recurrence(
+    val frequencyValue: Int = 1,
+    val frequencyUnit: String = "Month", // Day, Week, Month, Year
+    val endType: String = "Never", // Never, After
+    val endAfterCount: Int = 1
 )
 
 enum class TransactionType {
@@ -26,5 +34,5 @@ enum class TransactionType {
 }
 
 enum class TransactionStatus {
-    CLEARED, PENDING, RECONCILED
+    CLEARED, PENDING, RECONCILED, PLANNED
 }

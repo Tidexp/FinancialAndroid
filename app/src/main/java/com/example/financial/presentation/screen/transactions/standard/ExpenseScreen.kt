@@ -144,28 +144,10 @@ fun ExpenseScreen(
         }
         TransactionDivider()
 
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.ScreenshotMonitor, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(16.dp))
-            Text("Auto-pay", color = Color.Black, fontSize = 16.sp, modifier = Modifier.weight(1f))
-            Icon(Icons.AutoMirrored.Outlined.HelpOutline, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Switch(
-                checked = isAutoPay,
-                onCheckedChange = { isAutoPay = it },
-                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = Color(0xFF3478F6))
-            )
-        }
-        TransactionDivider()
-
-        ExpenseItem(icon = Icons.Outlined.Repeat, label = "Repeat", value = "Every month")
-        TransactionDivider()
-        
-        ExpenseItem(icon = Icons.AutoMirrored.Outlined.EventNote, label = "Weekends", value = "No change")
-        TransactionDivider()
-
-        ExpenseItem(icon = Icons.Outlined.StopCircle, label = "End", value = "Never")
-        TransactionDivider()
+        ScheduledTransactionFields(
+            isAutoPay = isAutoPay,
+            onAutoPayChange = { isAutoPay = it }
+        )
 
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),

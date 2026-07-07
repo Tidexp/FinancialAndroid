@@ -177,6 +177,19 @@ class FinancialRepository(
         }
     }
 
+    suspend fun deleteTransaction(transaction: Transaction) {
+        transactionDao.deleteTransaction(transaction.toEntity())
+        try {
+            firestore.collection("users")
+                .document(userId)
+                .collection("transactions")
+                .document(transaction.id)
+                .delete()
+        } catch (e: Exception) {
+            android.util.Log.e("FinancialRepository", "Firestore delete error: ${e.message}")
+        }
+    }
+
     suspend fun addAccount(account: Account) {
         accountDao.insertAccount(account.toEntity())
         

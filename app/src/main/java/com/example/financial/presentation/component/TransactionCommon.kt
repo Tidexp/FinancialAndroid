@@ -9,6 +9,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.EventNote
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -225,6 +227,44 @@ fun ExpenseItem(
             Icon(trailingIcon, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(20.dp))
         }
     }
+}
+
+@Composable
+fun ScheduledTransactionFields(
+    isAutoPay: Boolean,
+    onAutoPayChange: (Boolean) -> Unit,
+    repeatValue: String = "Every month",
+    onRepeatClick: () -> Unit = {},
+    endValue: String = "Never",
+    onEndClick: () -> Unit = {}
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(Icons.Outlined.ScreenshotMonitor, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text("Auto-pay", color = Color.Black, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Outlined.HelpOutline, null, tint = Color.Gray, modifier = Modifier.size(20.dp))
+        Spacer(modifier = Modifier.width(8.dp))
+        Switch(
+            checked = isAutoPay,
+            onCheckedChange = onAutoPayChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = Color.White,
+                checkedTrackColor = Color(0xFF3478F6)
+            )
+        )
+    }
+    TransactionDivider()
+
+    ExpenseItem(icon = Icons.Outlined.Repeat, label = "Repeat", value = repeatValue, onClick = onRepeatClick)
+    TransactionDivider()
+
+    ExpenseItem(icon = Icons.Outlined.StopCircle, label = "End", value = endValue, onClick = onEndClick)
+    TransactionDivider()
 }
 
 @Composable

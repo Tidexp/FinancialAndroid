@@ -221,11 +221,114 @@ class FinancialViewModel(
         }
     }
 
+    fun deleteTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            repository.deleteTransaction(transaction)
+            
+            // If it was CLEARED, we might need to reverse the balance update.
+            // But for PLANNED (scheduled), we just delete it.
+            if (transaction.status != TransactionStatus.CLEARED) return@launch
+            
+            val currentAccounts = _homeUiState.value.accounts
+            when (transaction.type) {
+                TransactionType.EXPENSE -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { account ->
+                        val newBalance = parseBalance(account.balance) + transaction.amount
+                        repository.updateAccount(account.copy(balance = formatBalance(newBalance)))
+                    }
+                }
+                TransactionType.INCOME -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { account ->
+                        val newBalance = parseBalance(account.balance) - transaction.amount
+                        repository.updateAccount(account.copy(balance = formatBalance(newBalance)))
+                    }
+                }
+                TransactionType.TRANSFER -> {
+                    currentAccounts.find { it.id == transaction.fromAccountId }?.let { fromAcc ->
+                        val newFromBalance = parseBalance(fromAcc.balance) + transaction.amount
+                        repository.updateAccount(fromAcc.copy(balance = formatBalance(newFromBalance)))
+                    }
+                    transaction.toAccountId?.let { toId ->
+                        currentAccounts.find { it.id == toId }?.let { toAcc ->
+                            val newToBalance = parseBalance(toAcc.balance) - transaction.amount
+                            repository.updateAccount(toAcc.copy(balance = formatBalance(newToBalance)))
+                        }
+                    }
+                }
+                TransactionType.ADJUSTMENT -> {
+                    // This is tricky because we don't know the previous balance
+                    // Maybe we shouldn't reverse adjustment directly without more info
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun payScheduledTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            // 1. Create a CLEARED transaction (the payment itself)
+            val payment = transaction.copy(
+                id = java.util.UUID.randomUUID().toString(),
+                status = TransactionStatus.CLEARED,
+                date = System.currentTimeMillis()
+            )
+            addTransaction(payment)
+
+            // 2. Reschedule the original one
+            rescheduleTransaction(transaction)
+        }
+    }
+
+    fun skipScheduledTransaction(transaction: Transaction) {
+        viewModelScope.launch {
+            rescheduleTransaction(transaction)
+        }
+    }
+
+    private suspend fun rescheduleTransaction(transaction: Transaction) {
+        val recurrence = transaction.recurrence
+        if (recurrence == null) {
+            // If no recurrence, this was a one-time scheduled transaction
+            repository.deleteTransaction(transaction)
+            return
+        }
+        
+        // Calculate next date
+        val calendar = java.util.Calendar.getInstance()
+        calendar.timeInMillis = transaction.date
+        
+        when (recurrence.frequencyUnit.lowercase()) {
+            "day" -> calendar.add(java.util.Calendar.DAY_OF_YEAR, recurrence.frequencyValue)
+            "week" -> calendar.add(java.util.Calendar.WEEK_OF_YEAR, recurrence.frequencyValue)
+            "month" -> calendar.add(java.util.Calendar.MONTH, recurrence.frequencyValue)
+            "year" -> calendar.add(java.util.Calendar.YEAR, recurrence.frequencyValue)
+            else -> calendar.add(java.util.Calendar.MONTH, recurrence.frequencyValue)
+        }
+
+        val nextTransaction = transaction.copy(date = calendar.timeInMillis)
+        
+        // Update or Delete based on end criteria
+        if (recurrence.endType == "After") {
+            val remainingCount = recurrence.endAfterCount - 1
+            if (remainingCount <= 0) {
+                repository.deleteTransaction(transaction)
+            } else {
+                repository.addTransaction(nextTransaction.copy(
+                    recurrence = recurrence.copy(endAfterCount = remainingCount)
+                ))
+            }
+        } else {
+            repository.addTransaction(nextTransaction)
+        }
+    }
+
     fun addTransaction(transaction: Transaction) {
         viewModelScope.launch {
             repository.addTransaction(transaction)
             
-            // Update account balance(s)
+            // Only update account balance(s) if transaction is CLEARED
+            if (transaction.status != TransactionStatus.CLEARED) return@launch
+
             val currentAccounts = _homeUiState.value.accounts
             
             when (transaction.type) {

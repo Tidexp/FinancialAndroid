@@ -23,14 +23,16 @@ import com.example.financial.domain.model.AccountType
 import com.example.financial.presentation.screen.transactions.standard.*
 import com.example.financial.presentation.screen.transactions.crypto.*
 import com.example.financial.presentation.screen.transactions.investment.*
+import com.example.financial.presentation.screen.scheduled.setup.*
 import kotlinx.coroutines.launch
 
 @Composable
 fun AddTransactionScreen(
     viewModel: com.example.financial.presentation.viewmodel.FinancialViewModel,
-    account: Account?,
+    account: com.example.financial.domain.model.Account?,
     initialType: String? = null,
     isScheduled: Boolean = false,
+    existingTransaction: com.example.financial.domain.model.Transaction? = null,
     onBackClick: () -> Unit
 ) {
     val uiState by viewModel.homeUiState.collectAsState()
@@ -51,7 +53,7 @@ fun AddTransactionScreen(
 
     val pagerState = rememberPagerState { tabs.size }
     val scope = rememberCoroutineScope()
-    var currentSaveAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val saveActions = remember { mutableStateMapOf<Int, () -> Unit>() }
 
     LaunchedEffect(initialType) {
         if (initialType != null) {
@@ -130,12 +132,12 @@ fun AddTransactionScreen(
 
             // Save Button
             Button(
-                onClick = { currentSaveAction?.invoke() },
+                onClick = { saveActions[pagerState.currentPage]?.invoke() },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3478F6)),
                 shape = RoundedCornerShape(20.dp),
                 contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp),
                 modifier = Modifier.height(36.dp),
-                enabled = currentSaveAction != null
+                enabled = saveActions.containsKey(pagerState.currentPage)
             ) {
                 Text("Save", fontWeight = FontWeight.Bold, color = Color.White, fontSize = 14.sp)
             }
@@ -162,35 +164,81 @@ fun AddTransactionScreen(
         ) { page ->
             val screenType = tabs[page]
             when (screenType) {
-                "Expense" -> ExpenseScreen(
-                    showHeader = false, 
-                    account = account,
-                    onSave = { transaction ->
-                        viewModel.addTransaction(transaction)
-                        onBackClick()
-                    },
-                    onRegisterSaveAction = { currentSaveAction = it }
-                )
-                "Income" -> IncomeScreen(
-                    showHeader = false,
-                    account = account,
-                    onSave = { transaction ->
-                        viewModel.addTransaction(transaction)
-                        onBackClick()
-                    },
-                    onRegisterSaveAction = { currentSaveAction = it }
-                )
+                "Expense" -> {
+                    if (isScheduled) {
+                        ScheduledExpenseScreen(
+                            viewModel = viewModel,
+                            showHeader = false,
+                            account = account,
+                            existingTransaction = existingTransaction,
+                            onSave = { transaction ->
+                                viewModel.addTransaction(transaction)
+                                onBackClick()
+                            },
+                            onRegisterSaveAction = { saveActions[page] = it }
+                        )
+                    } else {
+                        ExpenseScreen(
+                            showHeader = false,
+                            account = account,
+                            onSave = { transaction ->
+                                viewModel.addTransaction(transaction)
+                                onBackClick()
+                            },
+                            onRegisterSaveAction = { saveActions[page] = it }
+                        )
+                    }
+                }
+                "Income" -> {
+                    if (isScheduled) {
+                        ScheduledIncomeScreen(
+                            viewModel = viewModel,
+                            showHeader = false,
+                            account = account,
+                            existingTransaction = existingTransaction,
+                            onSave = { transaction ->
+                                viewModel.addTransaction(transaction)
+                                onBackClick()
+                            },
+                            onRegisterSaveAction = { saveActions[page] = it }
+                        )
+                    } else {
+                        IncomeScreen(
+                            showHeader = false,
+                            account = account,
+                            onSave = { transaction ->
+                                viewModel.addTransaction(transaction)
+                                onBackClick()
+                            },
+                            onRegisterSaveAction = { saveActions[page] = it }
+                        )
+                    }
+                }
                 "Transfer" -> {
-                    TransferScreen(
-                        showHeader = false,
-                        fromAccount = account,
-                        allAccounts = uiState.accounts,
-                        onSave = { transaction ->
-                            viewModel.addTransaction(transaction)
-                            onBackClick()
-                        },
-                        onRegisterSaveAction = { currentSaveAction = it }
-                    )
+                    if (isScheduled) {
+                        ScheduledTransferScreen(
+                            viewModel = viewModel,
+                            showHeader = false,
+                            fromAccount = account,
+                            existingTransaction = existingTransaction,
+                            onSave = { transaction ->
+                                viewModel.addTransaction(transaction)
+                                onBackClick()
+                            },
+                            onRegisterSaveAction = { saveActions[page] = it }
+                        )
+                    } else {
+                        TransferScreen(
+                            showHeader = false,
+                            fromAccount = account,
+                            allAccounts = uiState.accounts,
+                            onSave = { transaction ->
+                                viewModel.addTransaction(transaction)
+                                onBackClick()
+                            },
+                            onRegisterSaveAction = { saveActions[page] = it }
+                        )
+                    }
                 }
                 "Adjust Balance" -> AdjustBalanceScreen(
                     showHeader = false,
@@ -199,7 +247,7 @@ fun AddTransactionScreen(
                         viewModel.addTransaction(transaction)
                         onBackClick()
                     },
-                    onRegisterSaveAction = { currentSaveAction = it }
+                    onRegisterSaveAction = { saveActions[page] = it }
                 )
                 "Exchange" -> ExchangeScreen(showHeader = false)
                 "Buy" -> BuyScreen(
@@ -209,7 +257,7 @@ fun AddTransactionScreen(
                         viewModel.addTransaction(transaction)
                         onBackClick()
                     },
-                    onRegisterSaveAction = { currentSaveAction = it }
+                    onRegisterSaveAction = { saveActions[page] = it }
                 )
                 "Sell" -> SellScreen(
                     showHeader = false,
@@ -218,7 +266,7 @@ fun AddTransactionScreen(
                         viewModel.addTransaction(transaction)
                         onBackClick()
                     },
-                    onRegisterSaveAction = { currentSaveAction = it }
+                    onRegisterSaveAction = { saveActions[page] = it }
                 )
             }
         }

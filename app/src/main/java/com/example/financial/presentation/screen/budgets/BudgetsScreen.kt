@@ -1,5 +1,6 @@
 package com.example.financial.presentation.screen.budgets
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,7 +28,8 @@ fun BudgetsScreen(
     viewModel: FinancialViewModel,
     onAddExpenseBudgetClick: () -> Unit,
     onAddIncomeBudgetClick: () -> Unit,
-    onAddBudgetsGroupClick: () -> Unit
+    onAddBudgetsGroupClick: () -> Unit,
+    onBudgetClick: (String) -> Unit
 ) {
     val uiState by viewModel.homeUiState.collectAsState()
 
@@ -201,7 +203,7 @@ fun BudgetsScreen(
                 }
                 val budgetsInGroup = filteredBudgets.filter { it.budgetGroupId == group.id }
                 items(budgetsInGroup) { budget ->
-                    BudgetItem(budget)
+                    BudgetItem(budget, onClick = { onBudgetClick(budget.id) })
                 }
             }
             
@@ -218,7 +220,7 @@ fun BudgetsScreen(
                     }
                 }
                 items(unGroupedBudgets) { budget ->
-                    BudgetItem(budget)
+                    BudgetItem(budget, onClick = { onBudgetClick(budget.id) })
                 }
             }
         }
@@ -230,9 +232,9 @@ fun BudgetsScreen(
 }
 
 @Composable
-fun BudgetItem(budget: Budget) {
+fun BudgetItem(budget: Budget, onClick: () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)

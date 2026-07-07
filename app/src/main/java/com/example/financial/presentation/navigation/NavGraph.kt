@@ -12,6 +12,7 @@ import androidx.navigation.navArgument
 import com.example.financial.presentation.screen.accounts.AccountsScreen
 import com.example.financial.presentation.screen.accounts.setup.*
 import com.example.financial.presentation.screen.budgets.BudgetsScreen
+import com.example.financial.presentation.screen.budgets.BudgetDetailScreen
 import com.example.financial.presentation.screen.budgets.setup.*
 import com.example.financial.presentation.screen.reports.ReportsScreen
 import com.example.financial.presentation.screen.scheduled.ScheduledScreen
@@ -231,8 +232,32 @@ fun NavGraph(navController: NavHostController) {
                 },
                 onAddBudgetsGroupClick = {
                     navController.navigate(Screen.AddBudgetsGroup.route)
+                },
+                onBudgetClick = { budgetId ->
+                    navController.navigate("budget_detail/$budgetId")
                 }
             )
+        }
+
+        composable(
+            route = "budget_detail/{budgetId}",
+            arguments = listOf(navArgument("budgetId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val budgetId = backStackEntry.arguments?.getString("budgetId")
+            val uiState by viewModel.homeUiState.collectAsState()
+            val budget = uiState.budgets.find { it.id == budgetId }
+
+            if (budget != null) {
+                BudgetDetailScreen(
+                    budget = budget,
+                    onBackClick = { navController.popBackStack() },
+                    onAddTransactionClick = {
+                        val type = if (budget.isIncome) "Income" else "Expense"
+                        val defaultAccountId = budget.accountIds.firstOrNull() ?: uiState.accounts.firstOrNull()?.id ?: "none"
+                        navController.navigate("add_transaction/$defaultAccountId/$type")
+                    }
+                )
+            }
         }
 
         composable(Screen.AddExpenseBudget.route) {
@@ -277,8 +302,41 @@ fun NavGraph(navController: NavHostController) {
                 onAddClick = {
                     val defaultAccountId = uiState.accounts.firstOrNull()?.id ?: "none"
                     navController.navigate("add_transaction/$defaultAccountId/Expense?isScheduled=true")
+                },
+                onEditScheduled = { transaction ->
+                    navController.navigate("edit_transaction/${transaction.id}?isScheduled=true")
                 }
             )
+        }
+
+        composable(
+            route = Screen.EditTransaction.route,
+            arguments = listOf(
+                navArgument("transactionId") { type = NavType.StringType },
+                navArgument("isScheduled") { type = NavType.BoolType; defaultValue = false }
+            )
+        ) { backStackEntry ->
+            val transactionId = backStackEntry.arguments?.getString("transactionId")
+            val isScheduled = backStackEntry.arguments?.getBoolean("isScheduled") ?: false
+            val uiState by viewModel.homeUiState.collectAsState()
+            val transaction = uiState.transactions.find { it.id == transactionId }
+            val account = uiState.accounts.find { it.id == transaction?.fromAccountId }
+
+            if (transaction != null) {
+                AddTransactionScreen(
+                    viewModel = viewModel,
+                    account = account,
+                    initialType = when (transaction.type) {
+                        com.example.financial.domain.model.TransactionType.EXPENSE -> "Expense"
+                        com.example.financial.domain.model.TransactionType.INCOME -> "Income"
+                        com.example.financial.domain.model.TransactionType.TRANSFER -> "Transfer"
+                        else -> "Expense"
+                    },
+                    isScheduled = isScheduled,
+                    existingTransaction = transaction,
+                    onBackClick = { navController.popBackStack() }
+                )
+            }
         }
         composable(Screen.Reports.route) {
             ReportsScreen(viewModel = viewModel)

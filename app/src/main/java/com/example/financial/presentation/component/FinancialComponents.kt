@@ -244,8 +244,14 @@ fun AccountItem(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun TransactionItem(transaction: Transaction, currentAccountId: String? = null) {
+fun TransactionItem(
+    transaction: Transaction,
+    currentAccountId: String? = null,
+    onLongClick: (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
     val icon = when (transaction.type) {
         TransactionType.EXPENSE -> Icons.Default.RemoveCircleOutline
         TransactionType.INCOME -> Icons.Default.AddCircleOutline
@@ -284,6 +290,16 @@ fun TransactionItem(transaction: Transaction, currentAccountId: String? = null) 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(
+                if (onClick != null || onLongClick != null) {
+                    Modifier.combinedClickable(
+                        onClick = onClick ?: {},
+                        onLongClick = onLongClick
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
