@@ -30,4 +30,22 @@ interface BudgetDao {
 
     @Delete
     suspend fun deleteBudgetGroup(group: BudgetGroupEntity)
+
+    @Query("SELECT * FROM budgets WHERE isSynced = 0")
+    suspend fun getUnsyncedBudgets(): List<BudgetEntity>
+
+    @Query("UPDATE budgets SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markBudgetsAsSynced(ids: List<String>)
+
+    @Query("SELECT * FROM budget_groups WHERE isSynced = 0")
+    suspend fun getUnsyncedBudgetGroups(): List<BudgetGroupEntity>
+
+    @Query("UPDATE budget_groups SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markGroupsAsSynced(ids: List<String>)
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBudgets(budgets: List<BudgetEntity>)
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertBudgetGroups(groups: List<BudgetGroupEntity>)
 }

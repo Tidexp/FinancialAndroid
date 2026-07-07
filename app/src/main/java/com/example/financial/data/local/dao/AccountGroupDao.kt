@@ -17,4 +17,13 @@ interface AccountGroupDao {
 
     @Delete
     suspend fun deleteGroup(group: AccountGroupEntity)
+
+    @Query("SELECT * FROM account_groups WHERE isSynced = 0")
+    suspend fun getUnsyncedAccountGroups(): List<AccountGroupEntity>
+
+    @Query("UPDATE account_groups SET isSynced = 1 WHERE id IN (:ids)")
+    suspend fun markAsSynced(ids: List<String>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAccountGroups(groups: List<AccountGroupEntity>)
 }

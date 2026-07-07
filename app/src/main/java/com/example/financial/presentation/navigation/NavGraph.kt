@@ -19,6 +19,7 @@ import com.example.financial.presentation.screen.budgets.setup.*
 import com.example.financial.presentation.screen.reports.ReportsScreen
 import com.example.financial.presentation.screen.scheduled.ScheduledScreen
 import com.example.financial.presentation.screen.settings.SettingsScreen
+import com.example.financial.presentation.screen.auth.LoginScreen
 import com.example.financial.presentation.screen.transactions.AddTransactionScreen
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 import com.example.financial.domain.model.AccountType
@@ -30,8 +31,19 @@ fun NavGraph(navController: NavHostController) {
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Accounts.route
+        startDestination = Screen.Login.route
     ) {
+        composable(Screen.Login.route) {
+            LoginScreen(
+                viewModel = viewModel,
+                onLoginSuccess = {
+                    navController.navigate(Screen.Accounts.route) {
+                        popUpTo(Screen.Login.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Accounts.route) {
             AccountsScreen(
                 viewModel = viewModel,
@@ -403,7 +415,14 @@ fun NavGraph(navController: NavHostController) {
             ReportsScreen(viewModel = viewModel)
         }
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(
+                viewModel = viewModel,
+                onNavigateToLogin = {
+                    navController.navigate(Screen.Login.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }

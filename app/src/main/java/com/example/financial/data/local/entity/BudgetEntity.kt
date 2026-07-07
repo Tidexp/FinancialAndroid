@@ -5,26 +5,30 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "budgets")
 data class BudgetEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    val amount: Double,
-    val isIncome: Boolean,
-    val color: Int,
-    val budgetGroupId: String? = null,
-    val startDate: Long,
-    val repeatEnabled: Boolean = true,
-    val frequencyValue: Int = 1,
-    val frequencyUnit: String = "month",
-    val rolloverEnabled: Boolean = false,
-    val accountIds: List<String> = emptyList(),
-    val categories: List<String> = emptyList(),
-    val lastUpdated: Long = System.currentTimeMillis()
+    @PrimaryKey var id: String = "",
+    var name: String = "",
+    var amount: Double = 0.0,
+    var isIncome: Boolean = false,
+    var color: Int = 0,
+    var budgetGroupId: String? = null,
+    var startDate: Long = 0L,
+    var repeatEnabled: Boolean = true,
+    var frequencyValue: Int = 1,
+    var frequencyUnit: String = "month",
+    var rolloverEnabled: Boolean = false,
+    var accountIds: List<String> = emptyList(),
+    var categories: List<String> = emptyList(),
+    var lastUpdated: Long = System.currentTimeMillis(),
+    var userId: String = "",
+    var isSynced: Boolean = false
 )
 
 @Entity(tableName = "budget_groups")
 data class BudgetGroupEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    val color: Int,
-    val lastUpdated: Long = System.currentTimeMillis()
+    @PrimaryKey var id: String = "",
+    var name: String = "",
+    var color: Int = 0,
+    var lastUpdated: Long = System.currentTimeMillis(),
+    var userId: String = "",
+    var isSynced: Boolean = false
 )

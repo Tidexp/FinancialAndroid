@@ -90,3 +90,18 @@ data class BudgetGroup(
     val name: String,
     val color: Color
 )
+
+data class ReportsData(
+    val totalIncome: Double,
+    val totalExpense: Double,
+    val netCashFlow: Double,
+    val categorySpending: List<CategorySpending>,
+    val incomeByCategory: List<CategorySpending>,
+    val dailyTrend: List<DailyAmount>
+)
+
+data class DailyAmount(
+    val date: Long,
+    val income: Double,
+    val expense: Double
+)

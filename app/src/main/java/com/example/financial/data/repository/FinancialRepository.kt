@@ -4,7 +4,6 @@ import com.example.financial.data.local.dao.AccountDao
 import com.example.financial.data.local.dao.AccountGroupDao
 import com.example.financial.data.local.dao.TransactionDao
 import com.example.financial.domain.model.*
-import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
@@ -16,9 +15,22 @@ class FinancialRepository(
     private val accountGroupDao: AccountGroupDao,
     private val budgetDao: com.example.financial.data.local.dao.BudgetDao,
     private val firestore: FirebaseFirestore,
-    private val auth: FirebaseAuth
+    private val authRepository: AuthRepository
 ) {
-    private val userId: String get() = auth.currentUser?.uid ?: "anonymous"
+    private val userId: String get() = authRepository.currentUser?.id ?: "anonymous"
+    private val isAnonymous: Boolean get() = authRepository.currentUser?.isAnonymous ?: true
+
+    private fun <T> syncToFirestore(collection: String, id: String, data: T) {
+        if (isAnonymous) return
+        firestore.collection("users").document(userId)
+            .collection(collection).document(id).set(data!!)
+    }
+
+    private fun deleteFromFirestore(collection: String, id: String) {
+        if (isAnonymous) return
+        firestore.collection("users").document(userId)
+            .collection(collection).document(id).delete()
+    }
 
     fun getTransactions(): Flow<List<Transaction>> = transactionDao.getAllTransactions().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
     fun getAccounts(): Flow<List<Account>> = accountDao.getAllAccounts().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
@@ -74,21 +86,139 @@ class FinancialRepository(
     private fun parseBalance(s: String): Double = try { s.replace(",", ".").replace(Regex("[^0-9.-]"), "").toDouble() } catch (e: Exception) { 0.0 }
     private fun formatBalance(d: Double): String = String.format(java.util.Locale.getDefault(), "$%.2f", d)
 
-    fun getCategorySpending(): Flow<List<CategorySpending>> = flowOf(emptyList())
+    fun getCategorySpending(): Flow<List<CategorySpending>> = getTransactions().map { transactions ->
+        val expenseTransactions = transactions.filter { it.type == TransactionType.EXPENSE && it.budgetId == null }
+        val totalExpense = expenseTransactions.sumOf { it.amount }
+        
+        expenseTransactions.groupBy { it.categoryId ?: "Uncategorized" }
+            .map { (category, list) ->
+                val amount = list.sumOf { it.amount }
+                CategorySpending(
+                    label = category,
+                    amount = formatBalance(amount),
+                    progress = if (totalExpense > 0) (amount / totalExpense).toFloat() else 0f,
+                    color = androidx.compose.ui.graphics.Color((0xFF000000.toLong() or (category.hashCode().toLong() and 0xFFFFFF)).toInt())
+                )
+            }.sortedByDescending { it.progress }
+    }.flowOn(Dispatchers.Default)
 
-    suspend fun addTransaction(t: Transaction) { transactionDao.insertTransaction(t.toEntity()) }
-    suspend fun updateTransaction(t: Transaction) { transactionDao.insertTransaction(t.toEntity()) }
-    suspend fun deleteTransaction(t: Transaction) { transactionDao.deleteTransaction(t.toEntity()) }
-    suspend fun addAccount(a: Account) { accountDao.insertAccount(a.toEntity()) }
-    suspend fun updateAccount(a: Account) { accountDao.updateAccount(a.toEntity()) }
-    suspend fun deleteAccount(a: Account) { accountDao.deleteAccount(a.toEntity()) }
-    suspend fun addAccountGroup(g: AccountGroup) { accountGroupDao.insertGroup(g.toEntity()) }
-    suspend fun updateAccountGroup(g: AccountGroup) { accountGroupDao.updateGroup(g.toEntity()) }
-    suspend fun deleteAccountGroup(g: AccountGroup) { accountGroupDao.deleteGroup(g.toEntity()) }
-    suspend fun addBudget(b: Budget) { budgetDao.insertBudget(b.toEntity()) }
-    suspend fun updateBudget(b: Budget) { budgetDao.updateBudget(b.toEntity()) }
-    suspend fun deleteBudget(b: Budget) { budgetDao.deleteBudget(b.toEntity()) }
-    suspend fun addBudgetGroup(g: BudgetGroup) { budgetDao.insertBudgetGroup(g.toEntity()) }
-    suspend fun updateBudgetGroup(g: BudgetGroup) { budgetDao.updateBudgetGroup(g.toEntity()) }
-    suspend fun deleteBudgetGroup(g: BudgetGroup) { budgetDao.deleteBudgetGroup(g.toEntity()) }
+    fun getReportsData(startDate: Long, endDate: Long): Flow<ReportsData> = getTransactions().map { allTransactions ->
+        val filtered = allTransactions.filter { it.date in startDate..endDate && it.budgetId == null }
+        
+        val totalIncome = filtered.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+        val totalExpense = filtered.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+        
+        val expenseByCategory = filtered.filter { it.type == TransactionType.EXPENSE }
+            .groupBy { it.categoryId ?: "Uncategorized" }
+            .map { (cat, list) ->
+                val amt = list.sumOf { it.amount }
+                CategorySpending(cat, formatBalance(amt), if(totalExpense > 0) (amt/totalExpense).toFloat() else 0f, 
+                    androidx.compose.ui.graphics.Color((0xFF000000.toLong() or (cat.hashCode().toLong() and 0xFFFFFF)).toInt()))
+            }.sortedByDescending { it.progress }
+
+        val incomeByCategory = filtered.filter { it.type == TransactionType.INCOME }
+            .groupBy { it.categoryId ?: "Uncategorized" }
+            .map { (cat, list) ->
+                val amt = list.sumOf { it.amount }
+                CategorySpending(cat, formatBalance(amt), if(totalIncome > 0) (amt/totalIncome).toFloat() else 0f,
+                    androidx.compose.ui.graphics.Color((0xFF000000.toLong() or (cat.hashCode().toLong() and 0xFFFFFF)).toInt()))
+            }.sortedByDescending { it.progress }
+
+        // Group by day for trend
+        val dailyTrend = filtered.groupBy { 
+            val cal = Calendar.getInstance()
+            cal.timeInMillis = it.date
+            cal.set(Calendar.HOUR_OF_DAY, 0)
+            cal.set(Calendar.MINUTE, 0)
+            cal.set(Calendar.SECOND, 0)
+            cal.set(Calendar.MILLISECOND, 0)
+            cal.timeInMillis
+        }.map { (date, list) ->
+            DailyAmount(
+                date = date,
+                income = list.filter { it.type == TransactionType.INCOME }.sumOf { it.amount },
+                expense = list.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+            )
+        }.sortedBy { it.date }
+
+        ReportsData(
+            totalIncome = totalIncome,
+            totalExpense = totalExpense,
+            netCashFlow = totalIncome - totalExpense,
+            categorySpending = expenseByCategory,
+            incomeByCategory = incomeByCategory,
+            dailyTrend = dailyTrend
+        )
+    }.flowOn(Dispatchers.Default)
+
+    suspend fun addTransaction(t: Transaction) { 
+        val entity = t.toEntity(userId, false)
+        transactionDao.insertTransaction(entity) 
+        syncToFirestore("transactions", t.id, entity)
+    }
+    suspend fun updateTransaction(t: Transaction) { 
+        val entity = t.toEntity(userId, false)
+        transactionDao.insertTransaction(entity) 
+        syncToFirestore("transactions", t.id, entity)
+    }
+    suspend fun deleteTransaction(t: Transaction) { 
+        transactionDao.deleteTransaction(t.toEntity(userId, false)) 
+        deleteFromFirestore("transactions", t.id)
+    }
+    suspend fun addAccount(a: Account) { 
+        val entity = a.toEntity(userId, false)
+        accountDao.insertAccount(entity) 
+        syncToFirestore("accounts", a.id, entity)
+    }
+    suspend fun updateAccount(a: Account) { 
+        val entity = a.toEntity(userId, false)
+        accountDao.updateAccount(entity) 
+        syncToFirestore("accounts", a.id, entity)
+    }
+    suspend fun deleteAccount(a: Account) { 
+        accountDao.deleteAccount(a.toEntity(userId, false)) 
+        deleteFromFirestore("accounts", a.id)
+    }
+    suspend fun addAccountGroup(g: AccountGroup) { 
+        val entity = g.toEntity(userId, false)
+        accountGroupDao.insertGroup(entity) 
+        syncToFirestore("accountGroups", g.id, entity)
+    }
+    suspend fun updateAccountGroup(g: AccountGroup) { 
+        val entity = g.toEntity(userId, false)
+        accountGroupDao.updateGroup(entity) 
+        syncToFirestore("accountGroups", g.id, entity)
+    }
+    suspend fun deleteAccountGroup(g: AccountGroup) { 
+        accountGroupDao.deleteGroup(g.toEntity(userId, false)) 
+        deleteFromFirestore("accountGroups", g.id)
+    }
+    suspend fun addBudget(b: Budget) { 
+        val entity = b.toEntity(userId, false)
+        budgetDao.insertBudget(entity) 
+        syncToFirestore("budgets", b.id, entity)
+    }
+    suspend fun updateBudget(b: Budget) { 
+        val entity = b.toEntity(userId, false)
+        budgetDao.updateBudget(entity) 
+        syncToFirestore("budgets", b.id, entity)
+    }
+    suspend fun deleteBudget(b: Budget) { 
+        budgetDao.deleteBudget(b.toEntity(userId, false)) 
+        deleteFromFirestore("budgets", b.id)
+    }
+    suspend fun addBudgetGroup(g: BudgetGroup) { 
+        val entity = g.toEntity(userId, false)
+        budgetDao.insertBudgetGroup(entity) 
+        syncToFirestore("budgetGroups", g.id, entity)
+    }
+    suspend fun updateBudgetGroup(g: BudgetGroup) { 
+        val entity = g.toEntity(userId, false)
+        budgetDao.updateBudgetGroup(entity) 
+        syncToFirestore("budgetGroups", g.id, entity)
+    }
+    suspend fun deleteBudgetGroup(g: BudgetGroup) { 
+        budgetDao.deleteBudgetGroup(g.toEntity(userId, false)) 
+        deleteFromFirestore("budgetGroups", g.id)
+    }
 }

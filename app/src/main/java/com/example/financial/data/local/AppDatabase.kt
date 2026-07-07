@@ -17,7 +17,7 @@ import com.example.financial.data.local.entity.*
         BudgetEntity::class,
         BudgetGroupEntity::class
     ],
-    version = 11,
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -26,4 +26,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
     abstract fun accountGroupDao(): AccountGroupDao
     abstract fun budgetDao(): BudgetDao
+
+    fun clearDatabase() {
+        this.clearAllTables()
+    }
 }

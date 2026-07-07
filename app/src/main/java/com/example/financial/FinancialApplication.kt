@@ -9,7 +9,7 @@ class FinancialApplication : Application() {
         Room.databaseBuilder(
             this,
             AppDatabase::class.java,
-            "financial_database"
+            "finance_data.db"
         )
             .fallbackToDestructiveMigration()
             .build()

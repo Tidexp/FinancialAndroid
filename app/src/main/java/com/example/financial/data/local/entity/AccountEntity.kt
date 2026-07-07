@@ -6,28 +6,30 @@ import com.example.financial.domain.model.AccountType
 
 @Entity(tableName = "accounts")
 data class AccountEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    val balance: String,
-    val type: AccountType,
-    val color: Int,
-    val groupId: String? = null,
-    val iconUri: String? = null,
-    val creditLimit: String? = null,
-    val statementCloseDay: String? = null,
-    val autoClear: Boolean = false,
-    val additionalInfo: String? = null,
+    @PrimaryKey var id: String = "",
+    var name: String = "",
+    var balance: String = "0.00",
+    var type: AccountType = AccountType.CHECKING,
+    var color: Int = 0,
+    var groupId: String? = null,
+    var iconUri: String? = null,
+    var creditLimit: String? = null,
+    var statementCloseDay: String? = null,
+    var autoClear: Boolean = false,
+    var additionalInfo: String? = null,
     // Loan specific
-    val principalAmount: String? = null,
-    val apr: String? = null,
-    val duration: String? = null,
-    val startDate: String? = null,
-    val firstDueDate: String? = null,
+    var principalAmount: String? = null,
+    var apr: String? = null,
+    var duration: String? = null,
+    var startDate: String? = null,
+    var firstDueDate: String? = null,
     // Investment specific
-    val asOfDate: String? = null,
+    var asOfDate: String? = null,
     // Forex specific
-    val currency: String? = null,
-    val lastUpdated: Long = System.currentTimeMillis(),
-    val orderIndex: Int = 0,
-    val monitoredByBudgetId: String? = null
+    var currency: String? = null,
+    var lastUpdated: Long = System.currentTimeMillis(),
+    var orderIndex: Int = 0,
+    var monitoredByBudgetId: String? = null,
+    var userId: String = "",
+    var isSynced: Boolean = false
 )

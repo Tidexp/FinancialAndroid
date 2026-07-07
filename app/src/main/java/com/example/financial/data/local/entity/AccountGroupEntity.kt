@@ -5,11 +5,13 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "account_groups")
 data class AccountGroupEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    val iconName: String?,
-    val iconUri: String?,
-    val color: Int,
-    val lastUpdated: Long = System.currentTimeMillis(),
-    val orderIndex: Int = 0
+    @PrimaryKey var id: String = "",
+    var name: String = "",
+    var iconName: String? = null,
+    var iconUri: String? = null,
+    var color: Int = 0,
+    var lastUpdated: Long = System.currentTimeMillis(),
+    var orderIndex: Int = 0,
+    var userId: String = "",
+    var isSynced: Boolean = false
 )

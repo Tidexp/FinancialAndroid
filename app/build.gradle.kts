@@ -51,6 +51,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.security.crypto)
+    implementation(libs.jbcrypt)
 
     // Room
     implementation(libs.androidx.room.runtime)

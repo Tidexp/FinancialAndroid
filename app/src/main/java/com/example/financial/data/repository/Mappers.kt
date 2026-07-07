@@ -29,18 +29,18 @@ fun TransactionEntity.toDomain(): Transaction {
         pricePerShare = pricePerShare,
         commission = commission,
         exchangeRate = exchangeRate,
-        recurrence = if (frequencyUnit != null) {
+        recurrence = frequencyUnit?.let { unit ->
             com.example.financial.domain.model.Recurrence(
                 frequencyValue = frequencyValue ?: 1,
-                frequencyUnit = frequencyUnit,
+                frequencyUnit = unit,
                 endType = endType ?: "Never",
                 endAfterCount = endAfterCount ?: 1
             )
-        } else null
+        }
     )
 }
 
-fun Transaction.toEntity(): TransactionEntity {
+fun Transaction.toEntity(userId: String = "", isSynced: Boolean = false): TransactionEntity {
     return TransactionEntity(
         id = id,
         type = type,
@@ -61,7 +61,9 @@ fun Transaction.toEntity(): TransactionEntity {
         frequencyValue = recurrence?.frequencyValue,
         frequencyUnit = recurrence?.frequencyUnit,
         endType = recurrence?.endType,
-        endAfterCount = recurrence?.endAfterCount
+        endAfterCount = recurrence?.endAfterCount,
+        userId = userId,
+        isSynced = isSynced
     )
 }
 
@@ -90,7 +92,7 @@ fun AccountEntity.toDomain(): Account {
     )
 }
 
-fun Account.toEntity(): AccountEntity {
+fun Account.toEntity(userId: String = "", isSynced: Boolean = false): AccountEntity {
     return AccountEntity(
         id = id,
         name = name,
@@ -111,7 +113,9 @@ fun Account.toEntity(): AccountEntity {
         asOfDate = asOfDate,
         currency = currency,
         orderIndex = orderIndex,
-        monitoredByBudgetId = monitoredByBudgetId
+        monitoredByBudgetId = monitoredByBudgetId,
+        userId = userId,
+        isSynced = isSynced
     )
 }
 
@@ -126,14 +130,16 @@ fun AccountGroupEntity.toDomain(): AccountGroup {
     )
 }
 
-fun AccountGroup.toEntity(): AccountGroupEntity {
+fun AccountGroup.toEntity(userId: String = "", isSynced: Boolean = false): AccountGroupEntity {
     return AccountGroupEntity(
         id = id,
         name = name,
         iconName = iconName,
         iconUri = iconUri,
         color = color.toArgb(),
-        orderIndex = orderIndex
+        orderIndex = orderIndex,
+        userId = userId,
+        isSynced = isSynced
     )
 }
 
@@ -155,7 +161,7 @@ fun BudgetEntity.toDomain(): com.example.financial.domain.model.Budget {
     )
 }
 
-fun com.example.financial.domain.model.Budget.toEntity(): BudgetEntity {
+fun com.example.financial.domain.model.Budget.toEntity(userId: String = "", isSynced: Boolean = false): BudgetEntity {
     return BudgetEntity(
         id = id,
         name = name,
@@ -169,7 +175,9 @@ fun com.example.financial.domain.model.Budget.toEntity(): BudgetEntity {
         frequencyUnit = frequencyUnit,
         rolloverEnabled = rolloverEnabled,
         accountIds = accountIds,
-        categories = categories
+        categories = categories,
+        userId = userId,
+        isSynced = isSynced
     )
 }
 
@@ -181,10 +189,12 @@ fun BudgetGroupEntity.toDomain(): com.example.financial.domain.model.BudgetGroup
     )
 }
 
-fun com.example.financial.domain.model.BudgetGroup.toEntity(): BudgetGroupEntity {
+fun com.example.financial.domain.model.BudgetGroup.toEntity(userId: String = "", isSynced: Boolean = false): BudgetGroupEntity {
     return BudgetGroupEntity(
         id = id,
         name = name,
-        color = color.toArgb()
+        color = color.toArgb(),
+        userId = userId,
+        isSynced = isSynced
     )
 }
