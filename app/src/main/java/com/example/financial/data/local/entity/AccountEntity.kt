@@ -7,6 +7,7 @@ import com.example.financial.domain.model.AccountType
 @Entity(tableName = "accounts")
 data class AccountEntity(
     @PrimaryKey val id: String,
+    val userId: String = "anonymous",
     val name: String,
     val balance: String,
     val type: AccountType,

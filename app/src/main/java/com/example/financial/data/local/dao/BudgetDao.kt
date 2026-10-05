@@ -10,8 +10,14 @@ interface BudgetDao {
     @Query("SELECT * FROM budgets")
     fun getAllBudgets(): Flow<List<BudgetEntity>>
 
+    @Query("SELECT * FROM budgets")
+    suspend fun getAllBudgetsList(): List<BudgetEntity>
+
     @Query("SELECT * FROM budget_groups")
     fun getAllBudgetGroups(): Flow<List<BudgetGroupEntity>>
+
+    @Query("SELECT * FROM budget_groups")
+    suspend fun getAllBudgetGroupsList(): List<BudgetGroupEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBudget(budget: BudgetEntity)

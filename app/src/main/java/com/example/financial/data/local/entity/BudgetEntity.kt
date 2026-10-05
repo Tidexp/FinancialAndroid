@@ -6,6 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "budgets")
 data class BudgetEntity(
     @PrimaryKey val id: String,
+    val userId: String = "anonymous",
     val name: String,
     val amount: Double,
     val isIncome: Boolean,
@@ -24,6 +25,7 @@ data class BudgetEntity(
 @Entity(tableName = "budget_groups")
 data class BudgetGroupEntity(
     @PrimaryKey val id: String,
+    val userId: String = "anonymous",
     val name: String,
     val color: Int,
     val lastUpdated: Long = System.currentTimeMillis()

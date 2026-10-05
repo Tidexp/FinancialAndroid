@@ -9,29 +9,45 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.example.financial.domain.model.AccountType
+import com.example.financial.presentation.screen.accounts.AccountDetailScreen
 import com.example.financial.presentation.screen.accounts.AccountsScreen
 import com.example.financial.presentation.screen.accounts.setup.*
-import com.example.financial.presentation.screen.budgets.BudgetsScreen
-import com.example.financial.presentation.screen.budgets.BudgetDetailScreen
+import com.example.financial.presentation.screen.auth.AuthScreen
 import com.example.financial.presentation.screen.budgets.AddBudgetTransactionScreen
 import com.example.financial.presentation.screen.budgets.BudgetDetailScreen
+import com.example.financial.presentation.screen.budgets.BudgetsScreen
 import com.example.financial.presentation.screen.budgets.setup.*
 import com.example.financial.presentation.screen.reports.ReportsScreen
 import com.example.financial.presentation.screen.scheduled.ScheduledScreen
 import com.example.financial.presentation.screen.settings.SettingsScreen
 import com.example.financial.presentation.screen.transactions.AddTransactionScreen
+import com.example.financial.presentation.viewmodel.AuthViewModel
 import com.example.financial.presentation.viewmodel.FinancialViewModel
-import com.example.financial.domain.model.AccountType
-import com.example.financial.presentation.screen.accounts.AccountDetailScreen
 
 @Composable
-fun NavGraph(navController: NavHostController) {
+fun NavGraph(
+    navController: NavHostController,
+    authViewModel: AuthViewModel = viewModel(factory = AuthViewModel.Factory),
+    startDestination: String = Screen.Accounts.route
+) {
     val viewModel: FinancialViewModel = viewModel(factory = FinancialViewModel.Factory)
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Accounts.route
+        startDestination = startDestination
     ) {
+        composable(Screen.Auth.route) {
+            AuthScreen(
+                viewModel = authViewModel,
+                onAuthSuccess = {
+                    navController.navigate(Screen.Accounts.route) {
+                        popUpTo(Screen.Auth.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Accounts.route) {
             AccountsScreen(
                 viewModel = viewModel,
@@ -68,20 +84,17 @@ fun NavGraph(navController: NavHostController) {
                 onBackClick = { navController.popBackStack() },
                 onTypeSelected = { type ->
                     when (type) {
-                        // Nhóm các loại dùng chung giao diện Standard
                         AccountType.CHECKING,
                         AccountType.SAVINGS,
                         AccountType.CASH_WALLET -> {
                             navController.navigate("create_standard_account/${type.name}")
                         }
-                        // Điều hướng sang màn hình Credit riêng biệt
                         AccountType.CREDIT -> {
                             navController.navigate("create_credit_account")
                         }
-                        AccountType.LOAN -> { // Thêm route cho Loan
+                        AccountType.LOAN -> {
                             navController.navigate("create_loan_account")
                         }
-                        // Trong SelectAccountTypeScreen -> onTypeSelected
                         AccountType.INVESTMENT -> {
                             navController.navigate("create_investment_account")
                         }
@@ -93,7 +106,6 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
-        // 1. Màn hình tạo tài khoản TIÊU CHUẨN (CHECKING, SAVINGS and CASH_WALLET)
         composable(
             route = "create_standard_account/{type}",
             arguments = listOf(navArgument("type") { type = NavType.StringType })
@@ -139,7 +151,6 @@ fun NavGraph(navController: NavHostController) {
             }
         }
 
-        // 2. Màn hình tạo tài khoản TÍN DỤNG (Credit) mới thêm
         composable(route = "create_credit_account") {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateCreditAccountScreen(
@@ -189,7 +200,6 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
-        // Màn hình tạo tài khoản LOAN
         composable("create_loan_account") {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateLoanAccountScreen(
@@ -213,7 +223,7 @@ fun NavGraph(navController: NavHostController) {
             CreateLoanAccountScreen(
                 accountId = accountId,
                 onBackClick = { navController.popBackStack() },
-                onSaveClick = { _, _, _, _, _, _, _, _, _, _, _, _ -> }, // Not used for edit
+                onSaveClick = { _, _, _, _, _, _, _, _, _, _, _, _ -> },
                 onUpdateClick = { account ->
                     viewModel.updateAccount(account)
                     navController.popBackStack()
@@ -224,7 +234,6 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
-        // Màn hình tạo tài khoản INVESMENT
         composable("create_investment_account") {
             val uiState by viewModel.homeUiState.collectAsState()
             CreateInvestmentAccountScreen(
@@ -351,7 +360,6 @@ fun NavGraph(navController: NavHostController) {
             )
         }
 
-        // Các route khác giữ nguyên
         composable(Screen.Budgets.route) {
             BudgetsScreen(
                 viewModel = viewModel,
@@ -382,7 +390,6 @@ fun NavGraph(navController: NavHostController) {
             val budget = uiState.budgets.find { it.id == budgetId }
 
             if (budget != null) {
-                // Determine duration of a period in millis for filtering
                 val periodMillis: Long = when (budget.frequencyUnit.lowercase()) {
                     "day" -> 24L * 60 * 60 * 1000
                     "week" -> 7L * 24 * 60 * 60 * 1000
@@ -396,12 +403,9 @@ fun NavGraph(navController: NavHostController) {
                 val currentPeriodStart = budget.startDate + (periodsPassed * periodMillis)
 
                 val budgetTransactions = uiState.transactions.filter { transaction ->
-                    // 1. Ưu tiên giao dịch được gắn trực tiếp vào budget này
                     if (transaction.budgetId == budget.id) return@filter true
-                    // 2. Không hiển thị giao dịch ảo của budget khác
                     if (transaction.budgetId != null) return@filter false
 
-                    // 3. Hiển thị giao dịch thật khớp tiêu chí
                     val typeMatch = transaction.type == (if (budget.isIncome) com.example.financial.domain.model.TransactionType.INCOME else com.example.financial.domain.model.TransactionType.EXPENSE)
                     val accountMatch = budget.accountIds.isEmpty() || budget.accountIds.contains(transaction.fromAccountId)
                     val categoryMatch = budget.categories.isEmpty() || budget.categories.any { it.equals(transaction.payee, ignoreCase = true) || it.equals(transaction.description, ignoreCase = true) }
@@ -486,6 +490,7 @@ fun NavGraph(navController: NavHostController) {
                 }
             )
         }
+
         composable(Screen.Scheduled.route) {
             val uiState by viewModel.homeUiState.collectAsState()
             ScheduledScreen(
@@ -534,14 +539,20 @@ fun NavGraph(navController: NavHostController) {
                 )
             }
         }
+
         composable(Screen.Reports.route) {
             ReportsScreen(viewModel = viewModel)
         }
+
         composable(Screen.Settings.route) {
-            SettingsScreen()
+            SettingsScreen(
+                authViewModel = authViewModel,
+                onLogOut = {
+                    navController.navigate(Screen.Auth.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
     }
 }
-
-
-

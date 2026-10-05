@@ -9,6 +9,9 @@ interface AccountGroupDao {
     @Query("SELECT * FROM account_groups")
     fun getAllGroups(): Flow<List<AccountGroupEntity>>
 
+    @Query("SELECT * FROM account_groups")
+    suspend fun getAllGroupsList(): List<AccountGroupEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertGroup(group: AccountGroupEntity)
 

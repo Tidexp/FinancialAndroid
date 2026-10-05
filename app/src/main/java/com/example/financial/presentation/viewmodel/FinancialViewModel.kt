@@ -72,19 +72,41 @@ class FinancialViewModel(
         checkConnections()
         loadHomeData()
         loadStatsData()
+        observeAuthState()
+    }
+
+    private fun observeAuthState() {
+        viewModelScope.launch {
+            authRepository.authStateFlow.collect { user ->
+                if (user != null) {
+                    if (user.isAnonymous) {
+                        _homeUiState.update { it.copy(authStatus = "Guest Mode", dbStatus = "Local DB Ready") }
+                    } else {
+                        val name = user.displayName ?: user.email?.substringBefore("@") ?: user.uid.take(6)
+                        _homeUiState.update { it.copy(authStatus = "Google ($name)", dbStatus = "Local DB Ready") }
+                        repository.syncFromCloud()
+                        repository.listenToCloudSync(viewModelScope)
+                        _homeUiState.update { it.copy(dbStatus = "Cloud Synced") }
+                    }
+                } else {
+                    _homeUiState.update { it.copy(authStatus = "Not Authenticated", dbStatus = "Local DB Ready") }
+                }
+            }
+        }
     }
 
     private fun checkConnections() {
         viewModelScope.launch {
-            if (authRepository.currentUser != null) {
-                _homeUiState.update { it.copy(authStatus = "Connected (${authRepository.currentUser?.uid?.take(6)})") }
-            } else {
-                authRepository.signInAnonymously().onSuccess { user ->
-                    _homeUiState.update { it.copy(authStatus = if (user != null) "Connected (${user.uid.take(6)})" else "Auth Empty") }
+            val user = authRepository.currentUser
+            if (user != null) {
+                if (user.isAnonymous) {
+                    _homeUiState.update { it.copy(authStatus = "Guest Mode", dbStatus = "Local DB Ready") }
+                } else {
+                    val name = user.displayName ?: user.email?.substringBefore("@") ?: user.uid.take(6)
+                    _homeUiState.update { it.copy(authStatus = "Google ($name)", dbStatus = "Local DB Ready") }
                 }
-            }
-            repository.getAccounts().take(1).collect {
-                _homeUiState.update { it.copy(dbStatus = "Local DB Ready") }
+            } else {
+                _homeUiState.update { it.copy(authStatus = "Not Authenticated", dbStatus = "Local DB Ready") }
             }
         }
     }
@@ -491,35 +513,96 @@ class FinancialViewModel(
     private fun loadHomeData() {
         viewModelScope.launch {
             combine(
-                repository.getBalanceData(),
                 repository.getAccounts(),
                 repository.getAccountGroups(),
-                repository.getBudgets(),
+                repository.getRawBudgets(),
                 repository.getBudgetGroups(),
                 repository.getTransactions()
-            ) { args ->
-                stateUpdate(args[0] as BalanceData, args[1] as List<Account>, args[2] as List<AccountGroup>, args[3] as List<Budget>, args[4] as List<BudgetGroup>, args[5] as List<Transaction>)
-            }.debounce(100).flowOn(Dispatchers.Default).collect { update ->
-                _homeUiState.update { update(it) }
+            ) { accounts, accountGroups, rawBudgets, budgetGroups, transactions ->
+                val realTransactions = transactions.filter { it.budgetId == null }
+                var total = 0.0
+                var liab = 0.0
+                accounts.forEach { a ->
+                    val b = parseBalance(a.balance)
+                    if (b < 0) liab += kotlin.math.abs(b)
+                    total += b
+                }
+                val inc = realTransactions.filter { it.type == TransactionType.INCOME }.sumOf { it.amount }
+                val exp = realTransactions.filter { it.type == TransactionType.EXPENSE }.sumOf { it.amount }
+                val balanceData = BalanceData(
+                    netWorth = formatBalance(total),
+                    liabilities = formatBalance(-liab),
+                    totalIncome = formatBalance(inc),
+                    totalExpenses = formatBalance(exp),
+                    monthlyBudget = 0f
+                )
+
+                val now = System.currentTimeMillis()
+                val processedBudgets = rawBudgets.map { budget ->
+                    val relevantTransactions = transactions.filter { t ->
+                        if (t.budgetId == budget.id) return@filter true
+                        if (t.budgetId != null) return@filter false
+                        val typeMatch = t.type == (if (budget.isIncome) TransactionType.INCOME else TransactionType.EXPENSE)
+                        val accMatch = budget.accountIds.isEmpty() || budget.accountIds.contains(t.fromAccountId)
+                        val catMatch = budget.categories.isEmpty() || budget.categories.any { it.equals(t.payee, true) || it.equals(t.description, true) }
+                        typeMatch && accMatch && catMatch
+                    }
+
+                    val periodMillis: Long = when (budget.frequencyUnit.lowercase()) {
+                        "day" -> 24L * 3600000; "week" -> 7L * 24 * 3600000; "year" -> 365L * 24 * 3600000; else -> 30L * 24 * 3600000
+                    }
+                    val timePassed = now - budget.startDate
+                    val periodsPassed = if (timePassed > 0) (timePassed / periodMillis).toInt() else 0
+                    val currentPeriodStart = budget.startDate + (periodsPassed * periodMillis)
+
+                    val spentInCurrentPeriod = relevantTransactions.filter { it.date >= currentPeriodStart }.sumOf { it.amount }
+
+                    var rollover = 0.0
+                    if (budget.rolloverEnabled && periodsPassed > 0) {
+                        val pastSpent = relevantTransactions.filter { it.date >= budget.startDate && it.date < currentPeriodStart }.sumOf { it.amount }
+                        val pastBudgeted = budget.amount * periodsPassed
+                        rollover = if (budget.isIncome) pastSpent - pastBudgeted else pastBudgeted - pastSpent
+                    }
+
+                    budget.copy(
+                        spent = spentInCurrentPeriod,
+                        remaining = budget.amount - spentInCurrentPeriod + rollover,
+                        progress = if (budget.amount > 0) (spentInCurrentPeriod / budget.amount).toFloat().coerceIn(0f, 1f) else 0f
+                    )
+                }
+
+                val expenseBudgets = processedBudgets.filter { !it.isIncome }
+                val totalBudgeted = expenseBudgets.sumOf { it.amount }
+                val totalSpent = expenseBudgets.sumOf { it.spent }
+
+                listOf(
+                    balanceData,
+                    accounts,
+                    accountGroups,
+                    processedBudgets,
+                    budgetGroups,
+                    transactions,
+                    formatBalance(totalBudgeted),
+                    formatBalance(totalBudgeted - totalSpent)
+                )
+            }.debounce(50).flowOn(Dispatchers.Default).collect { data ->
+                @Suppress("UNCHECKED_CAST")
+                _homeUiState.update { currentState ->
+                    currentState.copy(
+                        balanceData = data[0] as BalanceData,
+                        accounts = data[1] as List<Account>,
+                        accountGroups = data[2] as List<AccountGroup>,
+                        budgets = data[3] as List<Budget>,
+                        budgetGroups = data[4] as List<BudgetGroup>,
+                        transactions = data[5] as List<Transaction>,
+                        totalBudgeted = data[6] as String,
+                        remainingBudget = data[7] as String,
+                        dbStatus = if (currentState.dbStatus == "Checking...") "Local DB Ready" else currentState.dbStatus,
+                        isLoading = false
+                    )
+                }
             }
         }
-    }
-
-    private fun stateUpdate(balance: BalanceData, accounts: List<Account>, accountGroups: List<AccountGroup>, budgets: List<Budget>, budgetGroups: List<BudgetGroup>, transactions: List<Transaction>): (HomeUiState) -> HomeUiState = { currentState ->
-        val expenseBudgets = budgets.filter { !it.isIncome }
-        val totalBudgeted = expenseBudgets.sumOf { it.amount }
-        val totalSpent = expenseBudgets.sumOf { it.spent }
-        currentState.copy(
-            balanceData = balance,
-            accounts = accounts,
-            accountGroups = accountGroups,
-            budgets = budgets,
-            budgetGroups = budgetGroups,
-            transactions = transactions,
-            totalBudgeted = formatBalance(totalBudgeted),
-            remainingBudget = formatBalance(totalBudgeted - totalSpent),
-            isLoading = false
-        )
     }
 
     private fun loadStatsData() {

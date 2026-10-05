@@ -8,6 +8,7 @@ import com.example.financial.domain.model.TransactionType
 @Entity(tableName = "transactions")
 data class TransactionEntity(
     @PrimaryKey val id: String,
+    val userId: String = "anonymous",
     val type: TransactionType,
     val fromAccountId: String,
     val toAccountId: String? = null,

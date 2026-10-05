@@ -8,7 +8,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
-import java.util.Calendar
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 class FinancialRepository(
     private val transactionDao: TransactionDao,
@@ -20,20 +21,146 @@ class FinancialRepository(
 ) {
     private val userId: String get() = auth.currentUser?.uid ?: "anonymous"
 
+    private fun userDoc(collectionName: String, docId: String) =
+        firestore.collection("users").document(userId).collection(collectionName).document(docId)
+
+    suspend fun seedDefaultDataIfEmpty() {
+        val currentAccounts = accountDao.getAllAccountsList()
+        if (currentAccounts.isEmpty()) {
+            val defaultAccount = Account(
+                id = java.util.UUID.randomUUID().toString(),
+                name = "Main Wallet",
+                balance = "$0.00",
+                type = AccountType.CASH_WALLET,
+                color = androidx.compose.ui.graphics.Color(0xFF4CAF50)
+            )
+            addAccount(defaultAccount)
+        }
+    }
+
+    suspend fun syncFromCloud() {
+        val uid = auth.currentUser?.uid ?: return
+        if (auth.currentUser?.isAnonymous == true) {
+            seedDefaultDataIfEmpty()
+            return
+        }
+
+        try {
+            // 0. Ensure root user document exists so 'users' collection and document appear in Firebase Console
+            val userData = mapOf(
+                "uid" to uid,
+                "email" to (auth.currentUser?.email ?: ""),
+                "displayName" to (auth.currentUser?.displayName ?: ""),
+                "lastLogin" to System.currentTimeMillis()
+            )
+            firestore.collection("users").document(uid).set(userData).await()
+
+            seedDefaultDataIfEmpty()
+
+            // 1. Upload existing local data to Firestore for this signed-in user
+            val localAccounts = accountDao.getAllAccountsList().map { it.toDomain() }
+            localAccounts.forEach { a ->
+                accountDao.insertAccount(a.toEntity(uid))
+                firestore.collection("users").document(uid).collection("accounts").document(a.id).set(a.toMap()).await()
+            }
+
+            val localGroups = accountGroupDao.getAllGroupsList().map { it.toDomain() }
+            localGroups.forEach { g ->
+                accountGroupDao.insertGroup(g.toEntity(uid))
+                firestore.collection("users").document(uid).collection("account_groups").document(g.id).set(g.toMap()).await()
+            }
+
+            val localBudgets = budgetDao.getAllBudgetsList().map { it.toDomain() }
+            localBudgets.forEach { b ->
+                budgetDao.insertBudget(b.toEntity(uid))
+                firestore.collection("users").document(uid).collection("budgets").document(b.id).set(b.toMap()).await()
+            }
+
+            val localBGroups = budgetDao.getAllBudgetGroupsList().map { it.toDomain() }
+            localBGroups.forEach { bg ->
+                budgetDao.insertBudgetGroup(bg.toEntity(uid))
+                firestore.collection("users").document(uid).collection("budget_groups").document(bg.id).set(bg.toMap()).await()
+            }
+
+            val localTxs = transactionDao.getAllTransactionsList().map { it.toDomain() }
+            localTxs.forEach { t ->
+                transactionDao.insertTransaction(t.toEntity(uid))
+                firestore.collection("users").document(uid).collection("transactions").document(t.id).set(t.toMap()).await()
+            }
+
+            // 2. Download any remote cloud data from Firestore to local Room
+            val accountSnapshots = firestore.collection("users").document(uid).collection("accounts").get().await()
+            val cloudAccounts = accountSnapshots.documents.mapNotNull { it.data?.let { data -> accountFromMap(data) } }
+            cloudAccounts.forEach { accountDao.insertAccount(it.toEntity(uid)) }
+
+            val groupSnapshots = firestore.collection("users").document(uid).collection("account_groups").get().await()
+            val cloudGroups = groupSnapshots.documents.mapNotNull { it.data?.let { data -> accountGroupFromMap(data) } }
+            cloudGroups.forEach { accountGroupDao.insertGroup(it.toEntity(uid)) }
+
+            val budgetSnapshots = firestore.collection("users").document(uid).collection("budgets").get().await()
+            val cloudBudgets = budgetSnapshots.documents.mapNotNull { it.data?.let { data -> budgetFromMap(data) } }
+            cloudBudgets.forEach { budgetDao.insertBudget(it.toEntity(uid)) }
+
+            val budgetGroupSnapshots = firestore.collection("users").document(uid).collection("budget_groups").get().await()
+            val cloudBGroups = budgetGroupSnapshots.documents.mapNotNull { it.data?.let { data -> budgetGroupFromMap(data) } }
+            cloudBGroups.forEach { budgetDao.insertBudgetGroup(it.toEntity(uid)) }
+
+            val txSnapshots = firestore.collection("users").document(uid).collection("transactions").get().await()
+            val cloudTxs = txSnapshots.documents.mapNotNull { it.data?.let { data -> transactionFromMap(data) } }
+            cloudTxs.forEach { transactionDao.insertTransaction(it.toEntity(uid)) }
+
+            seedDefaultDataIfEmpty()
+        } catch (e: Exception) {
+            android.util.Log.e("FinancialRepo", "Sync from cloud error: ${e.message}", e)
+            seedDefaultDataIfEmpty()
+        }
+    }
+
+    fun listenToCloudSync(scope: kotlinx.coroutines.CoroutineScope) {
+        val uid = auth.currentUser?.uid ?: return
+        if (auth.currentUser?.isAnonymous == true) return
+
+        firestore.collection("users").document(uid).collection("accounts")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                scope.launch(Dispatchers.IO) {
+                    val accounts = snapshot.documents.mapNotNull { doc -> doc.data?.let { accountFromMap(it) } }
+                    accounts.forEach { accountDao.insertAccount(it.toEntity(uid)) }
+                }
+            }
+
+        firestore.collection("users").document(uid).collection("transactions")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                scope.launch(Dispatchers.IO) {
+                    val txs = snapshot.documents.mapNotNull { doc -> doc.data?.let { transactionFromMap(it) } }
+                    txs.forEach { transactionDao.insertTransaction(it.toEntity(uid)) }
+                }
+            }
+
+        firestore.collection("users").document(uid).collection("budgets")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                scope.launch(Dispatchers.IO) {
+                    val budgets = snapshot.documents.mapNotNull { doc -> doc.data?.let { budgetFromMap(it) } }
+                    budgets.forEach { budgetDao.insertBudget(it.toEntity(uid)) }
+                }
+            }
+    }
+
     fun getTransactions(): Flow<List<Transaction>> = transactionDao.getAllTransactions().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
     fun getAccounts(): Flow<List<Account>> = accountDao.getAllAccounts().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
     fun getAccountGroups(): Flow<List<AccountGroup>> = accountGroupDao.getAllGroups().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
     fun getBudgetGroups(): Flow<List<BudgetGroup>> = budgetDao.getAllBudgetGroups().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getRawBudgets(): Flow<List<Budget>> = budgetDao.getAllBudgets().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
 
     fun getBudgets(): Flow<List<Budget>> = combine(budgetDao.getAllBudgets(), getTransactions()) { entities, allTransactions ->
         entities.map { entity ->
             val budget = entity.toDomain()
-            // Lọc giao dịch: Hoặc là giao dịch thật khớp account/category, hoặc là giao dịch ảo dành riêng cho budget này
             val relevantTransactions = allTransactions.filter { t ->
-                if (t.budgetId == budget.id) return@filter true // Giao dịch ảo của budget
-                if (t.budgetId != null) return@filter false // Giao dịch ảo của budget khác
+                if (t.budgetId == budget.id) return@filter true
+                if (t.budgetId != null) return@filter false
                 
-                // Giao dịch thật
                 val typeMatch = t.type == (if (budget.isIncome) TransactionType.INCOME else TransactionType.EXPENSE)
                 val accMatch = budget.accountIds.isEmpty() || budget.accountIds.contains(t.fromAccountId)
                 val catMatch = budget.categories.isEmpty() || budget.categories.any { it.equals(t.payee, true) || it.equals(t.description, true) }
@@ -62,7 +189,6 @@ class FinancialRepository(
     }.flowOn(Dispatchers.Default)
 
     fun getBalanceData(): Flow<BalanceData> = combine(getAccounts(), getTransactions()) { accounts, transactions ->
-        // Ở đây CHỈ lấy giao dịch thật (budgetId == null)
         val realTransactions = transactions.filter { it.budgetId == null }
         var total = 0.0; var liab = 0.0
         accounts.forEach { a -> val b = parseBalance(a.balance); if (b < 0) liab += kotlin.math.abs(b); total += b }
@@ -76,19 +202,108 @@ class FinancialRepository(
 
     fun getCategorySpending(): Flow<List<CategorySpending>> = flowOf(emptyList())
 
-    suspend fun addTransaction(t: Transaction) { transactionDao.insertTransaction(t.toEntity()) }
-    suspend fun updateTransaction(t: Transaction) { transactionDao.insertTransaction(t.toEntity()) }
-    suspend fun deleteTransaction(t: Transaction) { transactionDao.deleteTransaction(t.toEntity()) }
-    suspend fun addAccount(a: Account) { accountDao.insertAccount(a.toEntity()) }
-    suspend fun updateAccount(a: Account) { accountDao.updateAccount(a.toEntity()) }
-    suspend fun deleteAccount(a: Account) { accountDao.deleteAccount(a.toEntity()) }
-    suspend fun addAccountGroup(g: AccountGroup) { accountGroupDao.insertGroup(g.toEntity()) }
-    suspend fun updateAccountGroup(g: AccountGroup) { accountGroupDao.updateGroup(g.toEntity()) }
-    suspend fun deleteAccountGroup(g: AccountGroup) { accountGroupDao.deleteGroup(g.toEntity()) }
-    suspend fun addBudget(b: Budget) { budgetDao.insertBudget(b.toEntity()) }
-    suspend fun updateBudget(b: Budget) { budgetDao.updateBudget(b.toEntity()) }
-    suspend fun deleteBudget(b: Budget) { budgetDao.deleteBudget(b.toEntity()) }
-    suspend fun addBudgetGroup(g: BudgetGroup) { budgetDao.insertBudgetGroup(g.toEntity()) }
-    suspend fun updateBudgetGroup(g: BudgetGroup) { budgetDao.updateBudgetGroup(g.toEntity()) }
-    suspend fun deleteBudgetGroup(g: BudgetGroup) { budgetDao.deleteBudgetGroup(g.toEntity()) }
+    suspend fun addTransaction(t: Transaction) {
+        transactionDao.insertTransaction(t.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("transactions", t.id).set(t.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun updateTransaction(t: Transaction) {
+        transactionDao.insertTransaction(t.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("transactions", t.id).set(t.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun deleteTransaction(t: Transaction) {
+        transactionDao.deleteTransaction(t.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("transactions", t.id).delete().await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun addAccount(a: Account) {
+        accountDao.insertAccount(a.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("accounts", a.id).set(a.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun updateAccount(a: Account) {
+        accountDao.updateAccount(a.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("accounts", a.id).set(a.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun deleteAccount(a: Account) {
+        accountDao.deleteAccount(a.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("accounts", a.id).delete().await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun addAccountGroup(g: AccountGroup) {
+        accountGroupDao.insertGroup(g.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("account_groups", g.id).set(g.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun updateAccountGroup(g: AccountGroup) {
+        accountGroupDao.updateGroup(g.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("account_groups", g.id).set(g.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun deleteAccountGroup(g: AccountGroup) {
+        accountGroupDao.deleteGroup(g.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("account_groups", g.id).delete().await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun addBudget(b: Budget) {
+        budgetDao.insertBudget(b.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("budgets", b.id).set(b.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun updateBudget(b: Budget) {
+        budgetDao.updateBudget(b.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("budgets", b.id).set(b.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun deleteBudget(b: Budget) {
+        budgetDao.deleteBudget(b.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("budgets", b.id).delete().await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun addBudgetGroup(g: BudgetGroup) {
+        budgetDao.insertBudgetGroup(g.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("budget_groups", g.id).set(g.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun updateBudgetGroup(g: BudgetGroup) {
+        budgetDao.updateBudgetGroup(g.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("budget_groups", g.id).set(g.toMap()).await() } catch (_: Exception) {}
+        }
+    }
+
+    suspend fun deleteBudgetGroup(g: BudgetGroup) {
+        budgetDao.deleteBudgetGroup(g.toEntity(userId))
+        if (userId != "anonymous") {
+            try { userDoc("budget_groups", g.id).delete().await() } catch (_: Exception) {}
+        }
+    }
 }
