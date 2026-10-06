@@ -1,8 +1,8 @@
 package com.example.financial.presentation.screen.settings
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
@@ -12,38 +12,43 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import coil.compose.AsyncImage
+import com.example.financial.data.local.UserPreferences
+import com.example.financial.data.local.availableCurrencies
 import com.example.financial.presentation.viewmodel.AuthViewModel
 
+enum class AppThemeMode(val label: String) {
+    SYSTEM("System Default"),
+    LIGHT("Light Mode"),
+    DARK("Dark Mode")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     authViewModel: AuthViewModel = viewModel(factory = AuthViewModel.Factory),
+    userPreferences: UserPreferences? = null,
     onLogOut: () -> Unit = {}
 ) {
-    val currentUser by authViewModel.currentUser.collectAsState()
+    val context = LocalContext.current
+    val prefs = userPreferences ?: remember { UserPreferences(context.applicationContext) }
+
     var showLogoutDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+    var showCurrencyDialog by remember { mutableStateOf(false) }
 
-    val isAnonymous = currentUser?.isAnonymous == true
-    val displayName = when {
-        isAnonymous -> "Guest User"
-        !currentUser?.displayName.isNullOrBlank() -> currentUser?.displayName.orEmpty()
-        !currentUser?.email.isNullOrBlank() -> currentUser?.email?.substringBefore("@") ?: "User"
-        else -> "User"
-    }
-    val email = when {
-        isAnonymous -> "Guest Account (Local Data)"
-        !currentUser?.email.isNullOrBlank() -> currentUser?.email.orEmpty()
-        else -> "No email provided"
-    }
-    val photoUrl = currentUser?.photoUrl
+    val currentTheme by prefs.themeMode.collectAsState()
+    val currentCurrency by prefs.currency.collectAsState()
 
+    var dailyReminderEnabled by remember { mutableStateOf(true) }
+    var budgetAlertsEnabled by remember { mutableStateOf(true) }
+
+    // Logout Confirmation Dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
@@ -72,119 +77,261 @@ fun SettingsScreen(
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Box(
-            modifier = Modifier
-                .size(110.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            if (photoUrl != null) {
-                AsyncImage(
-                    model = photoUrl,
-                    contentDescription = "Profile Picture",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Icon(
-                    imageVector = if (isAnonymous) Icons.Default.PersonOutline else Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(60.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+    // Theme Selection Dialog
+    if (showThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text("Select App Theme", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    AppThemeMode.entries.forEach { theme ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    prefs.setThemeMode(theme)
+                                    showThemeDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = currentTheme == theme,
+                                onClick = {
+                                    prefs.setThemeMode(theme)
+                                    showThemeDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(theme.label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
+                    Text("Close")
+                }
             }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = displayName,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
         )
+    }
 
-        Spacer(modifier = Modifier.height(4.dp))
+    // Currency Selection Dialog
+    if (showCurrencyDialog) {
+        AlertDialog(
+            onDismissRequest = { showCurrencyDialog = false },
+            title = { Text("Default Currency", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    availableCurrencies.forEach { currencyOption ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    prefs.setCurrency(currencyOption)
+                                    showCurrencyDialog = false
+                                }
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = currentCurrency.code == currencyOption.code,
+                                onClick = {
+                                    prefs.setCurrency(currencyOption)
+                                    showCurrencyDialog = false
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(currencyOption.label, style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showCurrencyDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
 
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = if (isAnonymous) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.tertiaryContainer
-        ) {
-            Text(
-                text = if (isAnonymous) "Guest" else "Google Account",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = if (isAnonymous) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onTertiaryContainer,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings", fontWeight = FontWeight.Bold) }
             )
         }
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = email,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        if (currentUser?.uid != null) {
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = "User ID: ${currentUser?.uid}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp)
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column {
-                ProfileMenuItem(Icons.Default.Settings, "Account Settings")
-                ProfileMenuItem(Icons.Default.Notifications, "Notifications")
-                ProfileMenuItem(Icons.Default.Lock, "Security")
-                ProfileMenuItem(Icons.Default.Info, "Help & Support")
+            // Appearance & Theme Section
+            item {
+                SettingsSectionHeader("Appearance")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column {
+                        SettingsClickableItem(
+                            icon = Icons.Default.Palette,
+                            title = "App Theme",
+                            subtitle = currentTheme.label,
+                            onClick = { showThemeDialog = true }
+                        )
+                    }
+                }
+            }
+
+            // Regional & Currency Section
+            item {
+                SettingsSectionHeader("Preferences")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column {
+                        SettingsClickableItem(
+                            icon = Icons.Default.AttachMoney,
+                            title = "Default Currency",
+                            subtitle = currentCurrency.label,
+                            onClick = { showCurrencyDialog = true }
+                        )
+                        HorizontalDivider()
+                        SettingsClickableItem(
+                            icon = Icons.Default.Language,
+                            title = "Language",
+                            subtitle = "English (US)",
+                            onClick = { }
+                        )
+                    }
+                }
+            }
+
+            // Notifications Section
+            item {
+                SettingsSectionHeader("Notifications")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column {
+                        SettingsSwitchItem(
+                            icon = Icons.Default.Notifications,
+                            title = "Daily Expense Reminders",
+                            subtitle = "Remind to record daily transactions",
+                            checked = dailyReminderEnabled,
+                            onCheckedChange = { dailyReminderEnabled = it }
+                        )
+                        HorizontalDivider()
+                        SettingsSwitchItem(
+                            icon = Icons.Default.Warning,
+                            title = "Budget Alerts",
+                            subtitle = "Notify when budget exceeds 80%",
+                            checked = budgetAlertsEnabled,
+                            onCheckedChange = { budgetAlertsEnabled = it }
+                        )
+                    }
+                }
+            }
+
+            // About Section
+            item {
+                SettingsSectionHeader("About")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column {
+                        SettingsClickableItem(
+                            icon = Icons.Default.Info,
+                            title = "App Version",
+                            subtitle = "1.0.0 (Build 100)",
+                            onClick = { }
+                        )
+                        HorizontalDivider()
+                        SettingsClickableItem(
+                            icon = Icons.Default.Policy,
+                            title = "Privacy Policy & Terms",
+                            subtitle = "Read our terms and policies",
+                            onClick = { }
+                        )
+                    }
+                }
+            }
+
+            // Log Out Button Section
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = { showLogoutDialog = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer
+                    ),
+                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Log Out", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                }
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Button(
-            onClick = { showLogoutDialog = true },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.onErrorContainer
-            ),
-            shape = RoundedCornerShape(24.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Log Out", fontWeight = FontWeight.Bold)
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
 @Composable
-fun ProfileMenuItem(icon: ImageVector, label: String) {
+fun SettingsSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+    )
+}
+
+@Composable
+fun SettingsClickableItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
     ListItem(
-        headlineContent = { Text(label) },
-        leadingContent = { Icon(icon, contentDescription = null) },
-        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) }
+        headlineContent = { Text(title, fontWeight = FontWeight.Medium) },
+        supportingContent = { Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+        leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        trailingContent = { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null) },
+        modifier = Modifier.clickable { onClick() }
+    )
+}
+
+@Composable
+fun SettingsSwitchItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(title, fontWeight = FontWeight.Medium) },
+        supportingContent = { Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+        leadingContent = { Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+        }
     )
 }

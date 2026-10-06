@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.financial.FinancialApplication
+import com.example.financial.data.local.UserPreferences
 import com.example.financial.data.repository.AuthRepository
 import com.example.financial.data.repository.FinancialRepository
 import com.example.financial.domain.model.*
@@ -38,7 +39,8 @@ data class StatisticsUiState(
 
 class FinancialViewModel(
     private val repository: FinancialRepository,
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    val userPreferences: UserPreferences
 ) : ViewModel() {
 
     companion object {
@@ -49,6 +51,7 @@ class FinancialViewModel(
                 val database = application.database
                 val firestore = FirebaseFirestore.getInstance()
                 val auth = FirebaseAuth.getInstance()
+                val userPrefs = UserPreferences(application)
                 val repository = FinancialRepository(
                     database.transactionDao(),
                     database.accountDao(),
@@ -57,7 +60,7 @@ class FinancialViewModel(
                     firestore,
                     auth
                 )
-                FinancialViewModel(repository, AuthRepository(auth))
+                FinancialViewModel(repository, AuthRepository(auth), userPrefs)
             }
         }
     }
@@ -73,6 +76,15 @@ class FinancialViewModel(
         loadHomeData()
         loadStatsData()
         observeAuthState()
+        observeCurrency()
+    }
+
+    private fun observeCurrency() {
+        viewModelScope.launch {
+            userPreferences.currency.collect {
+                loadHomeData()
+            }
+        }
     }
 
     private fun observeAuthState() {
@@ -507,7 +519,7 @@ class FinancialViewModel(
         } catch (e: Exception) { 0.0 }
     }
 
-    private fun formatBalance(balance: Double): String = String.format(java.util.Locale.getDefault(), "$%.2f", balance)
+    private fun formatBalance(balance: Double): String = userPreferences.formatAmount(balance)
 
     @OptIn(FlowPreview::class)
     private fun loadHomeData() {

@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.*
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -17,11 +18,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.financial.data.local.UserPreferences
 import com.example.financial.domain.model.AccountType
 import com.example.financial.domain.model.TransactionStatus
 import com.example.financial.presentation.navigation.NavGraph
 import com.example.financial.presentation.navigation.Screen
 import com.example.financial.presentation.navigation.bottomNavItems
+import com.example.financial.presentation.screen.settings.AppThemeMode
 import com.example.financial.presentation.viewmodel.AuthViewModel
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 import com.example.financial.ui.theme.FinancialTestTheme
@@ -33,7 +36,15 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            FinancialTestTheme {
+            val userPrefs = remember { UserPreferences(applicationContext) }
+            val themeMode by userPrefs.themeMode.collectAsState()
+            val isDarkTheme = when (themeMode) {
+                AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+                AppThemeMode.LIGHT -> false
+                AppThemeMode.DARK -> true
+            }
+
+            FinancialTestTheme(darkTheme = isDarkTheme) {
                 MainApp()
             }
         }
