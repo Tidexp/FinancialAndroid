@@ -21,12 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.financial.R
+import com.example.financial.BuildConfig
 import com.example.financial.domain.model.ChatMessage
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 import java.text.SimpleDateFormat
@@ -49,7 +48,7 @@ fun AiChatScreen(
     var pendingQuestion by remember { mutableStateOf<String?>(null) }
 
     val listState = rememberLazyListState()
-    val defaultKey = stringResource(R.string.gemini_api_key)
+    val defaultKey = BuildConfig.GEMINI_API_KEY
 
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(chatMessages.size, isAiThinking) {

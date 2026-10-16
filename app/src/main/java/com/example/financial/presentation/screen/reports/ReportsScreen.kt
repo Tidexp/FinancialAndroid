@@ -27,11 +27,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.example.financial.R
+import com.example.financial.BuildConfig
 import com.example.financial.domain.model.Account
 import com.example.financial.domain.model.Budget
 import com.example.financial.domain.model.Transaction
@@ -520,7 +519,7 @@ fun AiAdviceCard(
     var isLoadingAi by remember { mutableStateOf(false) }
     var showApiKeyDialog by remember { mutableStateOf(false) }
 
-    val defaultKey = stringResource(R.string.gemini_api_key)
+    val defaultKey = BuildConfig.GEMINI_API_KEY
     var customKey by remember { mutableStateOf("") }
 
     fun generateAdvice() {
