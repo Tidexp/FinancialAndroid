@@ -380,7 +380,8 @@ fun TransactionDetailSheet(
     transaction: Transaction,
     accounts: List<Account>,
     budgets: List<Budget>,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onEditClick: ((Transaction) -> Unit)? = null
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -389,11 +390,25 @@ fun TransactionDetailSheet(
                 .padding(16.dp)
                 .padding(bottom = 32.dp)
         ) {
-            Text(
-                text = "Transaction Details",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Transaction Details",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                if (onEditClick != null) {
+                    IconButton(onClick = {
+                        onDismiss()
+                        onEditClick(transaction)
+                    }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Transaction")
+                    }
+                }
+            }
             Spacer(modifier = Modifier.height(24.dp))
 
             DetailItem("Type", transaction.type.name)
@@ -420,13 +435,34 @@ fun TransactionDetailSheet(
 
             DetailItem("Status", transaction.status.name)
 
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onDismiss,
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Close")
+                if (onEditClick != null) {
+                    Button(
+                        onClick = {
+                            onDismiss()
+                            onEditClick(transaction)
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Edit")
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Close")
+                }
             }
         }
     }

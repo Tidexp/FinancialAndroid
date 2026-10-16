@@ -13,9 +13,13 @@ import com.example.financial.domain.model.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class HomeUiState(
     val balanceData: BalanceData? = null,
@@ -57,6 +61,7 @@ class FinancialViewModel(
                     database.accountDao(),
                     database.accountGroupDao(),
                     database.budgetDao(),
+                    database.chatMessageDao(),
                     firestore,
                     auth
                 )
@@ -70,6 +75,141 @@ class FinancialViewModel(
 
     private val _statsUiState = MutableStateFlow(StatisticsUiState(isLoading = true))
     val statsUiState: StateFlow<StatisticsUiState> = _statsUiState.asStateFlow()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val chatMessages: StateFlow<List<ChatMessage>> = authRepository.authStateFlow
+        .map { user -> user?.uid ?: "anonymous" }
+        .distinctUntilChanged()
+        .flatMapLatest { userId -> repository.getChatMessages(userId) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _isAiThinking = MutableStateFlow(false)
+    val isAiThinking: StateFlow<Boolean> = _isAiThinking.asStateFlow()
+
+    private val _chatHistoryError = MutableStateFlow<String?>(null)
+    val chatHistoryError: StateFlow<String?> = _chatHistoryError.asStateFlow()
+
+    fun sendMessageToAi(userQuery: String, apiKey: String = "") {
+        val query = userQuery.trim()
+        if (query.isEmpty() || _isAiThinking.value) return
+        _isAiThinking.value = true
+        viewModelScope.launch {
+            try {
+                val userMsg = ChatMessage(sender = "user", message = query)
+                repository.addChatMessage(userMsg)
+
+                val state = homeUiState.value
+                val accountsSummary = state.accounts.joinToString("; ") { "${it.name}: ${it.balance}" }
+                val budgetsSummary = state.budgets.joinToString("; ") { "${it.name}: ${it.spent}/${it.amount}" }
+                val accountsById = state.accounts.associateBy { it.id }
+                val budgetsById = state.budgets.associateBy { it.id }
+                val transactionDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                val transactionRecords = state.transactions
+                .sortedByDescending { it.date }
+                .joinToString("\n") { transaction ->
+                    val typeDescription = when (transaction.type) {
+                        TransactionType.INCOME -> "income received"
+                        TransactionType.EXPENSE -> "expense/spending"
+                        TransactionType.TRANSFER -> "transfer between accounts"
+                        TransactionType.ADJUSTMENT -> "balance adjustment; not ordinary income or spending"
+                        TransactionType.EXCHANGE -> "currency exchange between holdings"
+                        TransactionType.BUY -> "investment purchase; distinguish cash outflow from an ordinary expense"
+                        TransactionType.SELL -> "investment sale; distinguish proceeds from ordinary income"
+                    }
+                    val fromAccount = accountsById[transaction.fromAccountId]?.name
+                        ?: transaction.fromAccountId
+                    val toAccount = transaction.toAccountId?.let { accountId ->
+                        accountsById[accountId]?.name ?: accountId
+                    }
+                    val budgetName = transaction.budgetId?.let { budgetId ->
+                        budgetsById[budgetId]?.name ?: budgetId
+                    }
+                    val recurrence = transaction.recurrence?.let {
+                        "${it.frequencyValue} ${it.frequencyUnit}; end=${it.endType}; count=${it.endAfterCount}"
+                    }
+                    val fields = listOf(
+                        "id=${transaction.id}",
+                        "type=${transaction.type} ($typeDescription)",
+                        "amount=${String.format(Locale.US, "%.2f", transaction.amount)}",
+                        "fromAccount=$fromAccount",
+                        "toAccount=${toAccount ?: "none"}",
+                        "category=${transaction.categoryId ?: "none"}",
+                        "payee=${transaction.payee ?: "none"}",
+                        "description=${transaction.description ?: "none"}",
+                        "date=${transactionDateFormat.format(Date(transaction.date))}",
+                        "status=${transaction.status}",
+                        "memo=${transaction.memo ?: "none"}",
+                        "tags=${transaction.tags.joinToString(", ").ifBlank { "none" }}",
+                        "budget=${budgetName ?: "none"}",
+                        "symbol=${transaction.symbol ?: "none"}",
+                        "shares=${transaction.shares ?: "none"}",
+                        "pricePerShare=${transaction.pricePerShare ?: "none"}",
+                        "commission=${transaction.commission ?: "none"}",
+                        "exchangeRate=${transaction.exchangeRate ?: "none"}",
+                        "recurrence=${recurrence ?: "none"}"
+                    ).joinToString("; ") { field ->
+                        field.replace("\n", " ").replace("\r", " ")
+                    }
+                    "- $fields"
+                }
+
+                val prompt = """
+                You are an expert personal financial advisor assistant.
+                The following transaction list contains every transaction currently loaded in the app, with all available transaction fields. Use the explicit type and status; do not infer the transaction type from its amount sign, category, payee, or description. INCOME is money received and must never be counted as spending. EXPENSE is spending. TRANSFER and EXCHANGE are movements between accounts/holdings and are not ordinary income or expenses. ADJUSTMENT changes a balance and is not ordinary income or spending. BUY is an investment purchase; SELL is an investment sale. Distinguish investment proceeds/purchases from ordinary income/expenses. Respect transaction status and do not treat PLANNED transactions as completed.
+                Here is the user's current financial context:
+                Accounts: $accountsSummary
+                Budgets: $budgetsSummary
+                All Transactions (newest first):
+                $transactionRecords
+
+                    User question: "$query"
+
+                    Provide a concise, friendly, and helpful response based on their financial data where applicable.
+                """.trimIndent()
+
+                val key = apiKey.trim().takeUnless {
+                    it.isBlank() || it == "YOUR_GEMINI_API_KEY"
+                } ?: throw IllegalStateException("Gemini API key is not configured.")
+                val generativeModel = com.google.ai.client.generativeai.GenerativeModel(
+                    modelName = "gemini-3.5-flash-lite",
+                    apiKey = key
+                )
+                val response = generativeModel.generateContent(prompt)
+                val aiReply = response.text ?: "I couldn't process that request right now."
+
+                val aiMsg = ChatMessage(sender = "ai", message = aiReply)
+                repository.addChatMessage(aiMsg)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                val errorMsg = ChatMessage(
+                    sender = "ai",
+                    message = "Sorry, I ran into an issue: ${e.localizedMessage ?: "Please check your connection and API key."}"
+                )
+                repository.addLocalChatMessage(errorMsg)
+            } finally {
+                _isAiThinking.value = false
+            }
+        }
+    }
+
+    fun clearChatHistory() {
+        _chatHistoryError.value = null
+        viewModelScope.launch {
+            try {
+                repository.clearChatMessages()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.e("FinancialViewModel", "Failed to clear chat history", e)
+                _chatHistoryError.value = "Couldn't clear chat history. Please check your connection and try again."
+            }
+        }
+    }
+
+    fun dismissChatHistoryError() {
+        _chatHistoryError.value = null
+    }
 
     init {
         checkConnections()

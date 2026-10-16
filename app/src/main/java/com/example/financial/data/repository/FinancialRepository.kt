@@ -2,6 +2,7 @@ package com.example.financial.data.repository
 
 import com.example.financial.data.local.dao.AccountDao
 import com.example.financial.data.local.dao.AccountGroupDao
+import com.example.financial.data.local.dao.ChatMessageDao
 import com.example.financial.data.local.dao.TransactionDao
 import com.example.financial.domain.model.*
 import com.google.firebase.auth.FirebaseAuth
@@ -16,6 +17,7 @@ class FinancialRepository(
     private val accountDao: AccountDao,
     private val accountGroupDao: AccountGroupDao,
     private val budgetDao: com.example.financial.data.local.dao.BudgetDao,
+    private val chatMessageDao: ChatMessageDao,
     private val firestore: FirebaseFirestore,
     private val auth: FirebaseAuth
 ) {
@@ -109,6 +111,10 @@ class FinancialRepository(
             val cloudTxs = txSnapshots.documents.mapNotNull { it.data?.let { data -> transactionFromMap(data) } }
             cloudTxs.forEach { transactionDao.insertTransaction(it.toEntity(uid)) }
 
+            val chatSnapshots = firestore.collection("users").document(uid).collection("chat_messages").get().await()
+            val cloudMsgs = chatSnapshots.documents.mapNotNull { it.data?.let { data -> chatMessageFromMap(data) } }
+            cloudMsgs.forEach { chatMessageDao.insertMessage(it.toEntity(uid)) }
+
             seedDefaultDataIfEmpty()
         } catch (e: Exception) {
             android.util.Log.e("FinancialRepo", "Sync from cloud error: ${e.message}", e)
@@ -146,6 +152,51 @@ class FinancialRepository(
                     budgets.forEach { budgetDao.insertBudget(it.toEntity(uid)) }
                 }
             }
+
+        firestore.collection("users").document(uid).collection("chat_messages")
+            .addSnapshotListener { snapshot, error ->
+                if (error != null || snapshot == null) return@addSnapshotListener
+                scope.launch(Dispatchers.IO) {
+                    val msgs = snapshot.documents.mapNotNull { doc -> doc.data?.let { chatMessageFromMap(it) } }
+                    msgs.forEach { chatMessageDao.insertMessage(it.toEntity(uid)) }
+                }
+            }
+    }
+
+    fun getChatMessages(userId: String): Flow<List<ChatMessage>> =
+        chatMessageDao.getMessagesForUser(userId).map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+
+    suspend fun addChatMessage(message: ChatMessage) {
+        val currentUser = auth.currentUser
+        val messageUserId = currentUser?.uid ?: "anonymous"
+        chatMessageDao.insertMessage(message.toEntity(messageUserId))
+        if (currentUser != null && !currentUser.isAnonymous) {
+            firestore.collection("users").document(currentUser.uid)
+                .collection("chat_messages").document(message.id)
+                .set(message.toMap()).await()
+        }
+    }
+
+    suspend fun addLocalChatMessage(message: ChatMessage) {
+        chatMessageDao.insertMessage(message.toEntity(auth.currentUser?.uid ?: "anonymous"))
+    }
+
+    suspend fun clearChatMessages() {
+        val currentUser = auth.currentUser
+        val messageUserId = currentUser?.uid ?: "anonymous"
+
+        if (currentUser != null && !currentUser.isAnonymous) {
+            val chatMessages = firestore.collection("users").document(currentUser.uid)
+                .collection("chat_messages")
+            val messages = chatMessages.get().await()
+            messages.documents.chunked(450).forEach { documents ->
+                val batch = firestore.batch()
+                documents.forEach { document -> batch.delete(document.reference) }
+                batch.commit().await()
+            }
+        }
+
+        chatMessageDao.clearMessagesForUser(messageUserId)
     }
 
     fun getTransactions(): Flow<List<Transaction>> = transactionDao.getAllTransactions().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)

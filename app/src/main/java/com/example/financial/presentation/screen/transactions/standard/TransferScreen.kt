@@ -23,6 +23,7 @@ import com.example.financial.domain.model.Transaction
 import com.example.financial.domain.model.TransactionStatus
 import com.example.financial.domain.model.TransactionType
 import com.example.financial.presentation.component.*
+import java.util.Locale
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -31,36 +32,39 @@ fun TransferScreen(
     showHeader: Boolean = true,
     fromAccount: Account? = null,
     allAccounts: List<Account> = emptyList(),
+    existingTransaction: Transaction? = null,
     onSave: (Transaction) -> Unit = {},
     onCloseClick: () -> Unit = {},
     onRegisterSaveAction: (() -> Unit) -> Unit = {}
 ) {
-    var amount by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var memo by remember { mutableStateOf("") }
+    var selectedFromAccount by remember { mutableStateOf(fromAccount ?: allAccounts.find { it.id == existingTransaction?.fromAccountId }) }
+    var selectedToAccount by remember { mutableStateOf<Account?>(allAccounts.find { it.id == existingTransaction?.toAccountId }) }
+    var amount by remember { mutableStateOf(existingTransaction?.amount?.let { if (it > 0) String.format(Locale.getDefault(), "%.2f", it) else "" } ?: "") }
+    var description by remember { mutableStateOf(existingTransaction?.description ?: "") }
+    var memo by remember { mutableStateOf(existingTransaction?.memo ?: "") }
     
-    var selectedToAccount by remember { mutableStateOf<Account?>(null) }
     var showToAccountPicker by remember { mutableStateOf(false) }
 
     val saveAction = {
         val amountValue = parseNumericInput(amount)
-        if (amountValue > 0 && fromAccount != null && selectedToAccount != null) {
+        if (amountValue > 0 && selectedFromAccount != null && selectedToAccount != null) {
             onSave(
                 Transaction(
-                    id = UUID.randomUUID().toString(),
+                    id = existingTransaction?.id ?: UUID.randomUUID().toString(),
                     type = TransactionType.TRANSFER,
-                    fromAccountId = fromAccount.id,
+                    fromAccountId = selectedFromAccount!!.id,
                     toAccountId = selectedToAccount!!.id,
                     amount = amountValue,
                     description = description,
                     memo = memo,
-                    status = TransactionStatus.CLEARED
+                    date = existingTransaction?.date ?: System.currentTimeMillis(),
+                    status = existingTransaction?.status ?: TransactionStatus.CLEARED
                 )
             )
         }
     }
 
-    LaunchedEffect(amount, description, memo, fromAccount, selectedToAccount) {
+    LaunchedEffect(amount, description, memo, selectedFromAccount, selectedToAccount) {
         onRegisterSaveAction(saveAction)
     }
 
@@ -73,7 +77,7 @@ fun TransferScreen(
     ) {
         Box(modifier = Modifier.fillMaxWidth()) {
             Column {
-                ExpenseItem(icon = Icons.Outlined.CreditCard, label = "Select Account", value = fromAccount?.name ?: "Select")
+                ExpenseItem(icon = Icons.Outlined.CreditCard, label = "From Account", value = selectedFromAccount?.name ?: "Select")
                 TransactionDivider()
                 ExpenseItem(icon = Icons.Outlined.CreditCard, label = "To Account", value = selectedToAccount?.name ?: "Select", onClick = { showToAccountPicker = true })
             }
@@ -86,13 +90,24 @@ fun TransferScreen(
         }
         TransactionDivider()
 
-        TransactionRow(
-            icon = Icons.Outlined.AddCircle,
-            label = if (amount.isEmpty()) "0,00" else amount,
-            trailingText = "USD",
-            hasArrow = true,
-            onClick = { }
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Outlined.AddCircle, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(16.dp))
+            BasicTextField(
+                value = amount,
+                onValueChange = { amount = it },
+                modifier = Modifier.weight(1f),
+                textStyle = LocalTextStyle.current.copy(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.Black),
+                decorationBox = { inner ->
+                    if (amount.isEmpty()) Text("0,00", color = Color.LightGray, fontSize = 18.sp)
+                    inner()
+                }
+            )
+            Text("USD", color = Color.Gray, fontSize = 16.sp)
+        }
         TransactionDivider()
 
         Row(
@@ -114,17 +129,6 @@ fun TransferScreen(
         }
         TransactionDivider()
 
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Outlined.CalendarMonth, null, tint = Color.Gray, modifier = Modifier.size(24.dp))
-            Spacer(modifier = Modifier.width(16.dp))
-            TransactionDateBadge("5 Jul 2026")
-            Spacer(modifier = Modifier.width(8.dp))
-            TransactionDateBadge("12:00")
-            Spacer(modifier = Modifier.weight(1f))
-            Text("Date & time", color = Color.Gray, fontSize = 14.sp)
-        }
-        TransactionDivider()
-
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -142,9 +146,6 @@ fun TransferScreen(
                 }
             )
         }
-        TransactionDivider()
-        
-        ExpenseItem(icon = Icons.Outlined.LocalOffer, label = "Tags", value = "")
     }
 
     if (showToAccountPicker) {
@@ -153,7 +154,7 @@ fun TransferScreen(
                 Text("To Account", style = MaterialTheme.typography.titleLarge)
                 Spacer(modifier = Modifier.height(16.dp))
                 LazyColumn {
-                    items(allAccounts.filter { it.id != fromAccount?.id }) { account ->
+                    items(allAccounts.filter { it.id != selectedFromAccount?.id }) { account ->
                         ListItem(
                             modifier = Modifier.clickable {
                                 selectedToAccount = account

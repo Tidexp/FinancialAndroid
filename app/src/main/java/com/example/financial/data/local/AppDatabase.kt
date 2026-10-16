@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import com.example.financial.data.local.dao.AccountDao
 import com.example.financial.data.local.dao.AccountGroupDao
 import com.example.financial.data.local.dao.BudgetDao
+import com.example.financial.data.local.dao.ChatMessageDao
 import com.example.financial.data.local.dao.TransactionDao
 import com.example.financial.data.local.entity.*
 
@@ -16,8 +17,9 @@ import com.example.financial.data.local.entity.*
         AccountGroupEntity::class,
         BudgetEntity::class,
         BudgetGroupEntity::class,
+        ChatMessageEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -26,4 +28,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
     abstract fun accountGroupDao(): AccountGroupDao
     abstract fun budgetDao(): BudgetDao
+    abstract fun chatMessageDao(): ChatMessageDao
 }

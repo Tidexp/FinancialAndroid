@@ -31,18 +31,19 @@ fun IncomeScreen(
     allAccounts: List<Account> = emptyList(),
     initialPayee: String = "",
     initialCategory: String = "",
+    existingTransaction: Transaction? = null,
     onSave: (Transaction) -> Unit = {},
     onCloseClick: () -> Unit = {},
     onRegisterSaveAction: (() -> Unit) -> Unit = {}
 ) {
-    var selectedAccount by remember { mutableStateOf(account) }
-    var amount by remember { mutableStateOf("") }
-    var payee by remember { mutableStateOf(initialPayee) }
-    var description by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(initialCategory) }
-    var memo by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf(TransactionStatus.CLEARED) }
-    var transactionDate by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    var selectedAccount by remember { mutableStateOf(account ?: allAccounts.find { it.id == existingTransaction?.fromAccountId }) }
+    var amount by remember { mutableStateOf(existingTransaction?.amount?.let { if (it > 0) String.format(Locale.getDefault(), "%.2f", it) else "" } ?: "") }
+    var payee by remember { mutableStateOf(existingTransaction?.payee ?: initialPayee) }
+    var description by remember { mutableStateOf(existingTransaction?.description ?: "") }
+    var category by remember { mutableStateOf(existingTransaction?.categoryId ?: initialCategory) }
+    var memo by remember { mutableStateOf(existingTransaction?.memo ?: "") }
+    var status by remember { mutableStateOf(existingTransaction?.status ?: TransactionStatus.CLEARED) }
+    var transactionDate by remember { mutableLongStateOf(existingTransaction?.date ?: System.currentTimeMillis()) }
 
     // Picker states
     var showAccountPicker by remember { mutableStateOf(false) }
@@ -65,12 +66,13 @@ fun IncomeScreen(
         if (amountValue > 0 && selectedAccount != null) {
             onSave(
                 Transaction(
-                    id = UUID.randomUUID().toString(),
+                    id = existingTransaction?.id ?: UUID.randomUUID().toString(),
                     type = TransactionType.INCOME,
                     fromAccountId = selectedAccount!!.id,
                     amount = amountValue,
                     payee = payee,
                     description = description,
+                    categoryId = category,
                     memo = memo,
                     date = transactionDate,
                     status = status

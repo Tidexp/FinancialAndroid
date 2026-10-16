@@ -30,7 +30,8 @@ fun AccountDetailScreen(
     allBudgets: List<Budget> = emptyList(),
     onBackClick: () -> Unit,
     onDeleteClick: (Account) -> Unit,
-    onNavigateToTransaction: (type: String) -> Unit
+    onNavigateToTransaction: (type: String) -> Unit,
+    onEditTransactionClick: (transactionId: String) -> Unit = {}
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
@@ -155,7 +156,8 @@ fun AccountDetailScreen(
                 transaction = transaction,
                 accounts = allAccounts,
                 budgets = allBudgets,
-                onDismiss = { selectedTransaction = null }
+                onDismiss = { selectedTransaction = null },
+                onEditClick = { tx -> onEditTransactionClick(tx.id) }
             )
         }
 

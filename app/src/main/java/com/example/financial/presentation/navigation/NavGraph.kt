@@ -22,6 +22,7 @@ import com.example.financial.presentation.screen.reports.ReportsScreen
 import com.example.financial.presentation.screen.scheduled.ScheduledScreen
 import com.example.financial.presentation.screen.settings.SettingsScreen
 import com.example.financial.presentation.screen.transactions.AddTransactionScreen
+import com.example.financial.presentation.screen.reports.AiChatScreen
 import com.example.financial.presentation.viewmodel.AuthViewModel
 import com.example.financial.presentation.viewmodel.FinancialViewModel
 
@@ -332,6 +333,9 @@ fun NavGraph(
                     },
                     onNavigateToTransaction = { type ->
                         navController.navigate("add_transaction/${account.id}/$type")
+                    },
+                    onEditTransactionClick = { transactionId ->
+                        navController.navigate("edit_transaction/$transactionId")
                     }
                 )
             }
@@ -422,6 +426,9 @@ fun NavGraph(
                     onBackClick = { navController.popBackStack() },
                     onAddTransactionClick = {
                         navController.navigate("add_budget_transaction/${budget.id}")
+                    },
+                    onEditTransactionClick = { transactionId ->
+                        navController.navigate("edit_transaction/$transactionId")
                     }
                 )
             }
@@ -541,7 +548,17 @@ fun NavGraph(
         }
 
         composable(Screen.Reports.route) {
-            ReportsScreen(viewModel = viewModel)
+            ReportsScreen(
+                viewModel = viewModel,
+                onOpenAiChat = { navController.navigate(Screen.AiChat.route) }
+            )
+        }
+
+        composable(Screen.AiChat.route) {
+            AiChatScreen(
+                viewModel = viewModel,
+                onBackClick = { navController.popBackStack() }
+            )
         }
 
         composable(Screen.Settings.route) {

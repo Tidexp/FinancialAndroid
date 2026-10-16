@@ -6,9 +6,11 @@ import com.example.financial.data.local.entity.AccountEntity
 import com.example.financial.data.local.entity.AccountGroupEntity
 import com.example.financial.data.local.entity.BudgetEntity
 import com.example.financial.data.local.entity.BudgetGroupEntity
+import com.example.financial.data.local.entity.ChatMessageEntity
 import com.example.financial.data.local.entity.TransactionEntity
 import com.example.financial.domain.model.Account
 import com.example.financial.domain.model.AccountGroup
+import com.example.financial.domain.model.ChatMessage
 import com.example.financial.domain.model.Transaction
 
 fun TransactionEntity.toDomain(): Transaction {
@@ -402,5 +404,41 @@ fun budgetGroupFromMap(map: Map<String, Any?>): com.example.financial.domain.mod
         id = id,
         name = map["name"] as? String ?: "",
         color = Color(colorInt)
+    )
+}
+
+fun ChatMessageEntity.toDomain(): ChatMessage {
+    return ChatMessage(
+        id = id,
+        sender = sender,
+        message = message,
+        timestamp = timestamp
+    )
+}
+
+fun ChatMessage.toEntity(userId: String = "anonymous"): ChatMessageEntity {
+    return ChatMessageEntity(
+        id = id,
+        userId = userId,
+        sender = sender,
+        message = message,
+        timestamp = timestamp
+    )
+}
+
+fun ChatMessage.toMap(): Map<String, Any?> = mapOf(
+    "id" to id,
+    "sender" to sender,
+    "message" to message,
+    "timestamp" to timestamp
+)
+
+fun chatMessageFromMap(map: Map<String, Any?>): ChatMessage? {
+    val id = map["id"] as? String ?: return null
+    return ChatMessage(
+        id = id,
+        sender = map["sender"] as? String ?: "ai",
+        message = map["message"] as? String ?: "",
+        timestamp = (map["timestamp"] as? Number)?.toLong() ?: System.currentTimeMillis()
     )
 }

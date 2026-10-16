@@ -182,6 +182,7 @@ fun AddTransactionScreen(
                             showHeader = false,
                             account = account,
                             allAccounts = uiState.accounts,
+                            existingTransaction = existingTransaction,
                             onSave = { transaction ->
                                 viewModel.addTransaction(transaction)
                                 onBackClick()
@@ -208,6 +209,7 @@ fun AddTransactionScreen(
                             showHeader = false,
                             account = account,
                             allAccounts = uiState.accounts,
+                            existingTransaction = existingTransaction,
                             onSave = { transaction ->
                                 viewModel.addTransaction(transaction)
                                 onBackClick()
@@ -234,6 +236,7 @@ fun AddTransactionScreen(
                             showHeader = false,
                             fromAccount = account,
                             allAccounts = uiState.accounts,
+                            existingTransaction = existingTransaction,
                             onSave = { transaction ->
                                 viewModel.addTransaction(transaction)
                                 onBackClick()

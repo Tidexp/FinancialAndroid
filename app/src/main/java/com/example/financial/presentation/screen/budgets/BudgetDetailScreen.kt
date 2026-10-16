@@ -32,7 +32,8 @@ fun BudgetDetailScreen(
     allAccounts: List<com.example.financial.domain.model.Account> = emptyList(),
     allBudgets: List<Budget> = emptyList(),
     onBackClick: () -> Unit,
-    onAddTransactionClick: () -> Unit
+    onAddTransactionClick: () -> Unit,
+    onEditTransactionClick: (transactionId: String) -> Unit = {}
 ) {
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
 
@@ -182,7 +183,8 @@ fun BudgetDetailScreen(
             transaction = transaction,
             accounts = allAccounts,
             budgets = allBudgets,
-            onDismiss = { selectedTransaction = null }
+            onDismiss = { selectedTransaction = null },
+            onEditClick = { tx -> onEditTransactionClick(tx.id) }
         )
     }
 }
