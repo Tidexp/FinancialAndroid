@@ -3,6 +3,7 @@ package com.example.financial.presentation.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -316,14 +317,22 @@ fun NavGraph(
             val accountId = backStackEntry.arguments?.getString("accountId")
             val uiState by viewModel.homeUiState.collectAsState()
             val account = uiState.accounts.find { it.id == accountId }
+            val accountTransactions = remember(uiState.transactions, account?.id) {
+                val selectedAccountId = account?.id
+                if (selectedAccountId == null) {
+                    emptyList()
+                } else {
+                    uiState.transactions.filter {
+                        it.fromAccountId == selectedAccountId || it.toAccountId == selectedAccountId
+                    }
+                }
+            }
 
             if (account != null) {
                 AccountDetailScreen(
                     account = account,
                     groupName = uiState.accountGroups.find { it.id == account.groupId }?.name,
-                    transactions = uiState.transactions.filter { 
-                        it.fromAccountId == account.id || it.toAccountId == account.id 
-                    },
+                    transactions = accountTransactions,
                     allAccounts = uiState.accounts,
                     allBudgets = uiState.budgets,
                     onBackClick = { navController.popBackStack() },

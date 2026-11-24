@@ -1,9 +1,9 @@
 package com.example.financial.presentation.screen.accounts
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Notes
@@ -35,6 +35,9 @@ fun AccountDetailScreen(
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
     var selectedTransaction by remember { mutableStateOf<Transaction?>(null) }
+    val sortedTransactions = remember(transactions) {
+        transactions.sortedByDescending { it.date }
+    }
 
     Scaffold(
         topBar = {
@@ -56,97 +59,139 @@ fun AccountDetailScreen(
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp)
         ) {
-            // Header Card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = account.color.copy(alpha = 0.1f))
-            ) {
-                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(account.name, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text(account.type.displayName, style = MaterialTheme.typography.bodyLarge, color = Color.Gray)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(account.balance, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, color = account.color)
-                }
-            }
-
-            // Info Section
-            Text("Information", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                Column {
-                    DetailItem(Icons.Default.Layers, "Group", groupName ?: "None")
-                    DetailDivider()
-                    
-                    // Show specific fields based on type
-                    when (account.type) {
-                        AccountType.CREDIT -> {
-                            DetailItem(Icons.Default.CreditCard, "Credit Limit", account.creditLimit ?: "N/A")
-                            DetailDivider()
-                            DetailItem(Icons.Default.SyncAlt, "Statement Close Day", account.statementCloseDay ?: "N/A")
-                        }
-                        AccountType.LOAN -> {
-                            DetailItem(Icons.Default.Money, "Principal", account.principalAmount ?: "N/A")
-                            DetailDivider()
-                            DetailItem(Icons.Default.Percent, "APR", account.apr ?: "N/A")
-                        }
-                        AccountType.INVESTMENT -> {
-                            DetailItem(Icons.Default.CalendarToday, "As of Date", account.asOfDate ?: "N/A")
-                        }
-                        AccountType.FOREX -> {
-                            DetailItem(Icons.Default.CurrencyExchange, "Currency", account.currency ?: "N/A")
-                        }
-                        else -> {}
-                    }
-                    
-                    if (account.additionalInfo?.isNotBlank() == true) {
-                        DetailDivider()
-                        DetailItem(Icons.AutoMirrored.Filled.Notes, "Notes", account.additionalInfo)
-                    }
-                }
-            }
-
-            // History Section
-            if (transactions.isNotEmpty()) {
-                Text(
-                    "Transaction History", 
-                    style = MaterialTheme.typography.titleMedium, 
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                
+            item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = account.color.copy(alpha = 0.1f))
                 ) {
-                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-                        transactions.sortedByDescending { it.date }.forEachIndexed { index, transaction ->
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            account.name,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            account.type.displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            account.balance,
+                            style = MaterialTheme.typography.headlineLarge,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = account.color
+                        )
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    "Information",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                    Column {
+                        DetailItem(Icons.Default.Layers, "Group", groupName ?: "None")
+                        DetailDivider()
+
+                        when (account.type) {
+                            AccountType.CREDIT -> {
+                                DetailItem(Icons.Default.CreditCard, "Credit Limit", account.creditLimit ?: "N/A")
+                                DetailDivider()
+                                DetailItem(
+                                    Icons.Default.SyncAlt,
+                                    "Statement Close Day",
+                                    account.statementCloseDay ?: "N/A"
+                                )
+                            }
+                            AccountType.LOAN -> {
+                                DetailItem(Icons.Default.Money, "Principal", account.principalAmount ?: "N/A")
+                                DetailDivider()
+                                DetailItem(Icons.Default.Percent, "APR", account.apr ?: "N/A")
+                            }
+                            AccountType.INVESTMENT -> {
+                                DetailItem(Icons.Default.CalendarToday, "As of Date", account.asOfDate ?: "N/A")
+                            }
+                            AccountType.FOREX -> {
+                                DetailItem(Icons.Default.CurrencyExchange, "Currency", account.currency ?: "N/A")
+                            }
+                            else -> Unit
+                        }
+
+                        if (account.additionalInfo?.isNotBlank() == true) {
+                            DetailDivider()
+                            DetailItem(Icons.AutoMirrored.Filled.Notes, "Notes", account.additionalInfo)
+                        }
+                    }
+                }
+            }
+
+            if (sortedTransactions.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        "Transaction History",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                itemsIndexed(
+                    items = sortedTransactions,
+                    key = { _, transaction -> transaction.id }
+                ) { index, transaction ->
+                    val isFirst = index == 0
+                    val isLast = index == sortedTransactions.lastIndex
+                    val shape = RoundedCornerShape(
+                        topStart = if (isFirst) 12.dp else 0.dp,
+                        topEnd = if (isFirst) 12.dp else 0.dp,
+                        bottomStart = if (isLast) 12.dp else 0.dp,
+                        bottomEnd = if (isLast) 12.dp else 0.dp
+                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = shape,
+                        color = Color.White
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                             TransactionItem(
-                                transaction = transaction, 
+                                transaction = transaction,
                                 currentAccountId = account.id,
                                 onClick = { selectedTransaction = transaction }
                             )
-                            if (index < transactions.size - 1) {
-                                HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray.copy(alpha = 0.3f))
+                            if (!isLast) {
+                                HorizontalDivider(
+                                    thickness = 0.5.dp,
+                                    color = Color.LightGray.copy(alpha = 0.3f)
+                                )
                             }
                         }
                     }
                 }
             } else {
-                Box(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("No transactions yet", color = Color.Gray)
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No transactions yet", color = Color.Gray)
+                    }
                 }
             }
         }

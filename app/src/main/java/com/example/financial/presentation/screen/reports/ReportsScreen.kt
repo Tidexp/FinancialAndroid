@@ -1,5 +1,6 @@
 package com.example.financial.presentation.screen.reports
 
+import android.os.SystemClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.text.font.FontWeight
@@ -42,8 +44,11 @@ import com.example.financial.domain.model.Budget
 import com.example.financial.domain.model.Transaction
 import com.example.financial.domain.model.TransactionType
 import com.example.financial.presentation.viewmodel.FinancialViewModel
+import com.example.financial.presentation.performance.PerformanceMetricStore
 import com.google.ai.client.generativeai.GenerativeModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -85,9 +90,7 @@ private data class MutableMonthSummary(
 private data class ReportSummary(
     val income: Double,
     val expense: Double,
-    val categoryExpenses: List<Map.Entry<String, Float>>,
-    val accountReports: Map<String, AccountReportSummary>,
-    val budgetReports: Map<String, BudgetReportSummary>
+    val categoryExpenses: List<Map.Entry<String, Float>>
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,6 +99,7 @@ fun ReportsScreen(
     viewModel: FinancialViewModel,
     onOpenAiChat: () -> Unit = {}
 ) {
+    val context = LocalContext.current
     val currentLocale = LocalLocale.current.platformLocale
     val uiState by viewModel.homeUiState.collectAsStateWithLifecycle()
     val reportTransactions by viewModel.reportTransactions.collectAsStateWithLifecycle()
@@ -126,13 +130,11 @@ fun ReportsScreen(
 
     val filteredTransactions = remember(reportTransactions) { reportTransactions }
 
-    val reportSummary = remember(filteredTransactions, uiState.budgets) {
+    val reportSummary = remember(filteredTransactions) {
+        val startedAtNanos = SystemClock.elapsedRealtimeNanos()
         var income = 0.0
         var expense = 0.0
         val categoryTotals = linkedMapOf<String, Float>()
-
-        val accountSummaries = mutableMapOf<String, MutableAccountSummary>()
-        val budgetSummaries = mutableMapOf<String, MutableBudgetSummary>()
 
         filteredTransactions.forEach { transaction ->
             when (transaction.type) {
@@ -149,70 +151,124 @@ fun ReportsScreen(
                 categoryTotals[category] =
                     (categoryTotals[category] ?: 0f) + transaction.amount.toFloat()
             }
-
-            val fromAccountId = transaction.fromAccountId
-            val accountFrom = accountSummaries.getOrPut(fromAccountId) { MutableAccountSummary() }
-            accountFrom.transactions.add(transaction)
-            if (transaction.type == TransactionType.INCOME) {
-                accountFrom.income += transaction.amount
-            } else if (transaction.type == TransactionType.EXPENSE) {
-                accountFrom.expense += transaction.amount
-            } else if (transaction.type == TransactionType.TRANSFER) {
-                accountFrom.expense += transaction.amount
-            }
-
-            transaction.toAccountId?.let { toAccountId ->
-                val accountTo = accountSummaries.getOrPut(toAccountId) { MutableAccountSummary() }
-                accountTo.transactions.add(transaction)
-                if (transaction.type == TransactionType.TRANSFER) {
-                    accountTo.income += transaction.amount
-                }
-            }
-
-            uiState.budgets.forEach { budget ->
-                if (transaction.budgetId == budget.id) {
-                    budgetSummaries.getOrPut(budget.id) { MutableBudgetSummary() }
-                        .transactions.add(transaction)
-                    return@forEach
-                }
-                if (transaction.budgetId != null) return@forEach
-
-                val typeMatches =
-                    transaction.type == if (budget.isIncome) TransactionType.INCOME else TransactionType.EXPENSE
-                val accountMatches =
-                    budget.accountIds.isEmpty() || budget.accountIds.contains(transaction.fromAccountId)
-                val categoryMatches = budget.categories.isEmpty() ||
-                    budget.categories.any {
-                        it.equals(transaction.payee, true) ||
-                            it.equals(transaction.description, true)
-                    }
-
-                if (typeMatches && accountMatches && categoryMatches) {
-                    budgetSummaries.getOrPut(budget.id) { MutableBudgetSummary() }
-                        .transactions.add(transaction)
-                }
-            }
         }
 
-        val accountReports = accountSummaries.mapValues { (_, summary) ->
-            AccountReportSummary(
-                transactions = summary.transactions,
-                income = summary.income,
-                expense = summary.expense
-            )
-        }
-        val budgetReports = budgetSummaries.mapValues { (_, summary) ->
-            BudgetReportSummary(transactions = summary.transactions)
-        }
         val categoryExpenses = categoryTotals.entries.sortedByDescending { it.value }
-
-        ReportSummary(
+        val result = ReportSummary(
             income = income,
             expense = expense,
-            categoryExpenses = categoryExpenses,
-            accountReports = accountReports,
-            budgetReports = budgetReports
+            categoryExpenses = categoryExpenses
         )
+        PerformanceMetricStore.record(
+            context,
+            "report_aggregation",
+            SystemClock.elapsedRealtimeNanos() - startedAtNanos,
+            filteredTransactions.size
+        )
+        result
+    }
+
+    var accountReports by remember(filteredTransactions) {
+        mutableStateOf<Map<String, AccountReportSummary>?>(null)
+    }
+    LaunchedEffect(filteredTransactions, selectedCategoryTab) {
+        if (selectedCategoryTab == 1 && accountReports == null) {
+            val startedAtNanos = SystemClock.elapsedRealtimeNanos()
+            val summaries = withContext(Dispatchers.Default) {
+                val accountSummaries = mutableMapOf<String, MutableAccountSummary>()
+                filteredTransactions.forEach { transaction ->
+                    val accountFrom = accountSummaries.getOrPut(transaction.fromAccountId) {
+                        MutableAccountSummary()
+                    }
+                    accountFrom.transactions.add(transaction)
+                    when (transaction.type) {
+                        TransactionType.INCOME -> accountFrom.income += transaction.amount
+                        TransactionType.EXPENSE, TransactionType.TRANSFER ->
+                            accountFrom.expense += transaction.amount
+                        else -> Unit
+                    }
+
+                    transaction.toAccountId?.let { toAccountId ->
+                        val accountTo = accountSummaries.getOrPut(toAccountId) {
+                            MutableAccountSummary()
+                        }
+                        accountTo.transactions.add(transaction)
+                        if (transaction.type == TransactionType.TRANSFER) {
+                            accountTo.income += transaction.amount
+                        }
+                    }
+                }
+
+                accountSummaries.mapValues { (_, summary) ->
+                    AccountReportSummary(
+                        transactions = summary.transactions,
+                        income = summary.income,
+                        expense = summary.expense
+                    )
+                }
+            }
+            accountReports = summaries
+            PerformanceMetricStore.record(
+                context,
+                "report_account_aggregation",
+                SystemClock.elapsedRealtimeNanos() - startedAtNanos,
+                filteredTransactions.size
+            )
+        }
+    }
+
+    var budgetReports by remember(filteredTransactions, uiState.budgets) {
+        mutableStateOf<Map<String, BudgetReportSummary>?>(null)
+    }
+    LaunchedEffect(filteredTransactions, uiState.budgets, selectedCategoryTab) {
+        if (selectedCategoryTab == 2 && budgetReports == null) {
+            val startedAtNanos = SystemClock.elapsedRealtimeNanos()
+            val summaries = withContext(Dispatchers.Default) {
+                val budgetSummaries = mutableMapOf<String, MutableBudgetSummary>()
+                filteredTransactions.forEach { transaction ->
+                    val matchingBudgetId = transaction.budgetId
+                    if (matchingBudgetId != null) {
+                        budgetSummaries.getOrPut(matchingBudgetId) {
+                            MutableBudgetSummary()
+                        }.transactions.add(transaction)
+                    } else {
+                        uiState.budgets.forEach { budget ->
+                            val typeMatches =
+                                transaction.type == if (budget.isIncome) {
+                                    TransactionType.INCOME
+                                } else {
+                                    TransactionType.EXPENSE
+                                }
+                            val accountMatches =
+                                budget.accountIds.isEmpty() ||
+                                    budget.accountIds.contains(transaction.fromAccountId)
+                            val categoryMatches = budget.categories.isEmpty() ||
+                                budget.categories.any {
+                                    it.equals(transaction.payee, true) ||
+                                        it.equals(transaction.description, true)
+                                }
+
+                            if (typeMatches && accountMatches && categoryMatches) {
+                                budgetSummaries.getOrPut(budget.id) {
+                                    MutableBudgetSummary()
+                                }.transactions.add(transaction)
+                            }
+                        }
+                    }
+                }
+
+                budgetSummaries.mapValues { (_, summary) ->
+                    BudgetReportSummary(transactions = summary.transactions)
+                }
+            }
+            budgetReports = summaries
+            PerformanceMetricStore.record(
+                context,
+                "report_budget_aggregation",
+                SystemClock.elapsedRealtimeNanos() - startedAtNanos,
+                filteredTransactions.size
+            )
+        }
     }
 
     val totalIncome = reportSummary.income
@@ -232,6 +288,8 @@ fun ReportsScreen(
         isLoadingAi = true
         cachedAiAdviceText = ""
         coroutineScope.launch {
+            val requestStartedAtNanos = SystemClock.elapsedRealtimeNanos()
+            var firstContentRecorded = false
             try {
                 val generativeModel = GenerativeModel(
                     modelName = "gemini-3.5-flash-lite",
@@ -270,6 +328,15 @@ fun ReportsScreen(
                 generativeModel.generateContentStream(prompt).collect { chunk ->
                     val chunkText = chunk.text
                     if (!chunkText.isNullOrEmpty()) {
+                        if (!firstContentRecorded) {
+                            firstContentRecorded = true
+                            PerformanceMetricStore.record(
+                                context,
+                                "ai_first_content",
+                                SystemClock.elapsedRealtimeNanos() - requestStartedAtNanos,
+                                1
+                            )
+                        }
                         accumulatedText += chunkText
                         cachedAiAdviceText = accumulatedText
                     }
@@ -281,6 +348,12 @@ fun ReportsScreen(
             } catch (e: Exception) {
                 cachedAiAdviceText = "Error generating AI advice: ${e.localizedMessage}"
             } finally {
+                PerformanceMetricStore.record(
+                    context,
+                    "ai_complete",
+                    SystemClock.elapsedRealtimeNanos() - requestStartedAtNanos,
+                    if (firstContentRecorded) 1 else 0
+                )
                 isLoadingAi = false
             }
         }
@@ -464,11 +537,22 @@ fun ReportsScreen(
                     )
                 }
 
-                items(uiState.accounts, key = { "account_${it.id}" }) { account ->
-                    AccountSourceAnalyticsCard(
-                        account = account,
-                        summary = reportSummary.accountReports[account.id]
-                    )
+                if (accountReports == null) {
+                    item(key = "accounts_loading") {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
+                } else {
+                    items(uiState.accounts, key = { "account_${it.id}" }) { account ->
+                        AccountSourceAnalyticsCard(
+                            account = account,
+                            summary = accountReports?.get(account.id)
+                        )
+                    }
                 }
             }
 
@@ -486,11 +570,20 @@ fun ReportsScreen(
                     item(key = "budgets_empty") {
                         EmptyChartPlaceholder("No budgets set up yet. Add budgets to see analytics!")
                     }
+                } else if (budgetReports == null) {
+                    item(key = "budgets_loading") {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator()
+                        }
+                    }
                 } else {
                     items(uiState.budgets, key = { "budget_${it.id}" }) { budget ->
                         BudgetSourceAnalyticsCard(
                             budget = budget,
-                            summary = reportSummary.budgetReports[budget.id],
+                            summary = budgetReports?.get(budget.id),
                             allAccounts = uiState.accounts
                         )
                     }
@@ -849,12 +942,13 @@ fun CashflowBarChart(transactions: List<Transaction>) {
     val currentLocale = LocalLocale.current.platformLocale
     val monthsData = remember(transactions, currentLocale) {
         val sdf = SimpleDateFormat("MMM", currentLocale)
-        val grouped = linkedMapOf<String, MutableMonthSummary>()
+        val monthCalendar = Calendar.getInstance()
+        val grouped = linkedMapOf<Int, MutableMonthSummary>()
 
         transactions.forEach { transaction ->
-            val cal = Calendar.getInstance().apply { timeInMillis = transaction.date }
-            val month = sdf.format(cal.time)
-            val summary = grouped.getOrPut(month) { MutableMonthSummary() }
+            monthCalendar.timeInMillis = transaction.date
+            val monthKey = monthCalendar.get(Calendar.YEAR) * 12 + monthCalendar.get(Calendar.MONTH)
+            val summary = grouped.getOrPut(monthKey) { MutableMonthSummary() }
             if (transaction.type == TransactionType.INCOME) {
                 summary.income += transaction.amount.toFloat()
             } else if (transaction.type == TransactionType.EXPENSE) {
@@ -862,9 +956,18 @@ fun CashflowBarChart(transactions: List<Transaction>) {
             }
         }
 
-        grouped.map { (month, summary) ->
-            MonthSummary(month, summary.income, summary.expense)
-        }.takeLast(6)
+        grouped.entries.toList().takeLast(6).map { (monthKey, summary) ->
+            monthCalendar.set(
+                monthKey / 12,
+                monthKey % 12,
+                1,
+                0,
+                0,
+                0
+            )
+            monthCalendar.set(Calendar.MILLISECOND, 0)
+            MonthSummary(sdf.format(monthCalendar.time), summary.income, summary.expense)
+        }
     }
 
     if (monthsData.isEmpty()) {
@@ -1053,11 +1156,10 @@ fun CategoryDonutChart(categoryExpenses: List<Map.Entry<String, Float>>) {
 @Composable
 fun NetWorthTrendChart(transactions: List<Transaction>) {
     val trendData = remember(transactions) {
-        val sorted = transactions.sortedBy { it.date }
         var runningBalance = 0f
         val cumulativePoints = mutableListOf<Float>()
 
-        sorted.forEach { tx ->
+        transactions.asReversed().forEach { tx ->
             if (tx.type == TransactionType.INCOME) runningBalance += tx.amount.toFloat()
             if (tx.type == TransactionType.EXPENSE) runningBalance -= tx.amount.toFloat()
             cumulativePoints.add(runningBalance)

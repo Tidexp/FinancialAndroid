@@ -24,12 +24,16 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        manifestPlaceholders["appLabel"] = "FinancialTest"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     buildTypes {
+        debug {
+            manifestPlaceholders["appLabel"] = "FinancialTest - Optimized"
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
