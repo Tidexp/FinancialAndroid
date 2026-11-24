@@ -39,6 +39,7 @@ fun AiChatScreen(
 ) {
     val chatMessages by viewModel.chatMessages.collectAsState()
     val isAiThinking by viewModel.isAiThinking.collectAsState()
+    val streamingAiText by viewModel.streamingAiText.collectAsState()
     val chatHistoryError by viewModel.chatHistoryError.collectAsState()
 
     var inputText by remember { mutableStateOf("") }
@@ -51,7 +52,7 @@ fun AiChatScreen(
     val defaultKey = BuildConfig.GEMINI_API_KEY
 
     // Auto-scroll to bottom when new messages arrive
-    LaunchedEffect(chatMessages.size, isAiThinking) {
+    LaunchedEffect(chatMessages.size, isAiThinking, streamingAiText.length) {
         if (chatMessages.isNotEmpty()) {
             listState.animateScrollToItem(chatMessages.size - 1)
         }
@@ -242,13 +243,22 @@ fun AiChatScreen(
 
                         if (isAiThinking) {
                             item {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text("Gemini is analyzing your finances...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (streamingAiText.isBlank()) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    ) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text("Gemini is analyzing your finances...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                } else {
+                                    ChatMessageBubble(
+                                        message = ChatMessage(
+                                            sender = "ai",
+                                            message = streamingAiText
+                                        )
+                                    )
                                 }
                             }
                         }

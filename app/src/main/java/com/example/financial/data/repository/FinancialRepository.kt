@@ -4,6 +4,7 @@ import com.example.financial.data.local.dao.AccountDao
 import com.example.financial.data.local.dao.AccountGroupDao
 import com.example.financial.data.local.dao.ChatMessageDao
 import com.example.financial.data.local.dao.TransactionDao
+import com.example.financial.data.local.entity.TransactionEntity
 import com.example.financial.domain.model.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -11,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import androidx.compose.ui.graphics.Color
+import java.util.UUID
 
 class FinancialRepository(
     private val transactionDao: TransactionDao,
@@ -27,7 +30,7 @@ class FinancialRepository(
         firestore.collection("users").document(userId).collection(collectionName).document(docId)
 
     suspend fun seedDefaultDataIfEmpty() {
-        val currentAccounts = accountDao.getAllAccountsList()
+        val currentAccounts = accountDao.getAllAccountsList(userId)
         if (currentAccounts.isEmpty()) {
             val defaultAccount = Account(
                 id = java.util.UUID.randomUUID().toString(),
@@ -60,31 +63,31 @@ class FinancialRepository(
             seedDefaultDataIfEmpty()
 
             // 1. Upload existing local data to Firestore for this signed-in user
-            val localAccounts = accountDao.getAllAccountsList().map { it.toDomain() }
+            val localAccounts = accountDao.getAllAccountsList(uid).map { it.toDomain() }
             localAccounts.forEach { a ->
                 accountDao.insertAccount(a.toEntity(uid))
                 firestore.collection("users").document(uid).collection("accounts").document(a.id).set(a.toMap()).await()
             }
 
-            val localGroups = accountGroupDao.getAllGroupsList().map { it.toDomain() }
+            val localGroups = accountGroupDao.getAllGroupsList(uid).map { it.toDomain() }
             localGroups.forEach { g ->
                 accountGroupDao.insertGroup(g.toEntity(uid))
                 firestore.collection("users").document(uid).collection("account_groups").document(g.id).set(g.toMap()).await()
             }
 
-            val localBudgets = budgetDao.getAllBudgetsList().map { it.toDomain() }
+            val localBudgets = budgetDao.getAllBudgetsList(uid).map { it.toDomain() }
             localBudgets.forEach { b ->
                 budgetDao.insertBudget(b.toEntity(uid))
                 firestore.collection("users").document(uid).collection("budgets").document(b.id).set(b.toMap()).await()
             }
 
-            val localBGroups = budgetDao.getAllBudgetGroupsList().map { it.toDomain() }
+            val localBGroups = budgetDao.getAllBudgetGroupsList(uid).map { it.toDomain() }
             localBGroups.forEach { bg ->
                 budgetDao.insertBudgetGroup(bg.toEntity(uid))
                 firestore.collection("users").document(uid).collection("budget_groups").document(bg.id).set(bg.toMap()).await()
             }
 
-            val localTxs = transactionDao.getAllTransactionsList().map { it.toDomain() }
+            val localTxs = transactionDao.getAllTransactionsList(uid).map { it.toDomain() }
             localTxs.forEach { t ->
                 transactionDao.insertTransaction(t.toEntity(uid))
                 firestore.collection("users").document(uid).collection("transactions").document(t.id).set(t.toMap()).await()
@@ -199,13 +202,17 @@ class FinancialRepository(
         chatMessageDao.clearMessagesForUser(messageUserId)
     }
 
-    fun getTransactions(): Flow<List<Transaction>> = transactionDao.getAllTransactions().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
-    fun getAccounts(): Flow<List<Account>> = accountDao.getAllAccounts().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
-    fun getAccountGroups(): Flow<List<AccountGroup>> = accountGroupDao.getAllGroups().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
-    fun getBudgetGroups(): Flow<List<BudgetGroup>> = budgetDao.getAllBudgetGroups().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
-    fun getRawBudgets(): Flow<List<Budget>> = budgetDao.getAllBudgets().map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getTransactions(): Flow<List<Transaction>> = transactionDao.getAllTransactions(userId).map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getReportTransactions(startDateMillis: Long): Flow<List<Transaction>> =
+        transactionDao.getReportTransactions(userId, startDateMillis)
+            .map { entities -> entities.map { it.toDomain() } }
+            .flowOn(Dispatchers.IO)
+    fun getAccounts(): Flow<List<Account>> = accountDao.getAllAccounts(userId).map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getAccountGroups(): Flow<List<AccountGroup>> = accountGroupDao.getAllGroups(userId).map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getBudgetGroups(): Flow<List<BudgetGroup>> = budgetDao.getAllBudgetGroups(userId).map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
+    fun getRawBudgets(): Flow<List<Budget>> = budgetDao.getAllBudgets(userId).map { entities -> entities.map { it.toDomain() } }.flowOn(Dispatchers.IO)
 
-    fun getBudgets(): Flow<List<Budget>> = combine(budgetDao.getAllBudgets(), getTransactions()) { entities, allTransactions ->
+    fun getBudgets(): Flow<List<Budget>> = combine(budgetDao.getAllBudgets(userId), getTransactions()) { entities, allTransactions ->
         entities.map { entity ->
             val budget = entity.toDomain()
             val relevantTransactions = allTransactions.filter { t ->
@@ -253,107 +260,220 @@ class FinancialRepository(
 
     fun getCategorySpending(): Flow<List<CategorySpending>> = flowOf(emptyList())
 
+    suspend fun seedGuestPerformanceData(count: Int) {
+        val currentUser = auth.currentUser
+        if (currentUser?.isAnonymous != true) {
+            throw IllegalStateException("Performance data can only be created for Guest accounts.")
+        }
+        val guestUserId = currentUser.uid
+        transactionDao.deletePerformanceTransactions(guestUserId)
+        budgetDao.deletePerformanceBudgets(guestUserId)
+        accountDao.deletePerformanceAccounts(guestUserId)
+        val accountIds = (1..5).map { "__perf_account_$it" }
+
+        val categories = listOf("Food", "Transport", "Shopping", "Rent", "Utilities")
+        val now = System.currentTimeMillis()
+        val dayMillis = 24L * 60 * 60 * 1000
+        val accountBalances = mutableMapOf(
+            accountIds[0] to 10_000_000.0,
+            accountIds[1] to 8_000_000.0,
+            accountIds[2] to 6_000_000.0,
+            accountIds[3] to 2_000_000.0,
+            accountIds[4] to -500_000.0
+        )
+
+        val performanceTransactions = ArrayList<TransactionEntity>(500)
+        for (index in 0 until count) {
+            val isIncome = index % 5 == 0
+            val category = categories[index % categories.size]
+            val accountId = accountIds[index % accountIds.size]
+            val amount = if (isIncome) {
+                100000.0 + (index % 500) * 1000.0
+            } else {
+                10000.0 + (index % 500) * 250.0
+            }
+            accountBalances[accountId] =
+                accountBalances.getValue(accountId) + if (isIncome) amount else -amount
+
+            performanceTransactions.add(
+                Transaction(
+                    id = "__perf_tx_${UUID.nameUUIDFromBytes("guest-$guestUserId-$index".toByteArray()).toString()}",
+                    type = if (isIncome) TransactionType.INCOME else TransactionType.EXPENSE,
+                    fromAccountId = accountId,
+                    amount = amount,
+                    categoryId = if (isIncome) null else category,
+                    payee = if (isIncome) "Performance Salary" else category,
+                    description = "Performance test transaction $index",
+                    date = now - (index % 730).toLong() * dayMillis,
+                    status = TransactionStatus.CLEARED,
+                    budgetId = null
+                ).toEntity(guestUserId)
+            )
+
+            if (performanceTransactions.size == 500) {
+                transactionDao.insertTransactions(performanceTransactions)
+                performanceTransactions.clear()
+            }
+        }
+
+        val accountTypes = listOf(
+            AccountType.CASH_WALLET,
+            AccountType.CHECKING,
+            AccountType.SAVINGS,
+            AccountType.CREDIT,
+            AccountType.LOAN
+        )
+        val accountColors = listOf(
+            Color(0xFF4CAF50),
+            Color(0xFF2196F3),
+            Color(0xFFE91E63),
+            Color(0xFFFF9800),
+            Color(0xFF9C27B0)
+        )
+        val performanceAccounts = accountIds.mapIndexed { index, accountId ->
+            Account(
+                id = accountId,
+                name = "Performance Account ${index + 1}",
+                balance = formatBalance(accountBalances.getValue(accountId)),
+                type = accountTypes[index],
+                color = accountColors[index]
+            ).toEntity(guestUserId)
+        }
+        accountDao.insertAccounts(performanceAccounts)
+
+        if (performanceTransactions.isNotEmpty()) {
+            transactionDao.insertTransactions(performanceTransactions)
+        }
+
+        val performanceBudgets = categories.mapIndexed { index, category ->
+            Budget(
+                id = "__perf_bud_$index",
+                name = "Performance $category",
+                amount = 50_000_000.0,
+                isIncome = false,
+                color = accountColors[index],
+                startDate = now - 365L * 24 * 60 * 60 * 1000,
+                frequencyUnit = "month",
+                rolloverEnabled = false,
+                accountIds = accountIds,
+                categories = listOf(category),
+                spent = 0.0
+            ).toEntity(guestUserId)
+        }
+        budgetDao.insertBudgets(performanceBudgets)
+    }
+
+    suspend fun clearGuestPerformanceData() {
+        val currentUser = auth.currentUser
+        if (currentUser?.isAnonymous != true) {
+            throw IllegalStateException("Performance data can only be cleared for Guest accounts.")
+        }
+        transactionDao.deletePerformanceTransactions(currentUser.uid)
+        budgetDao.deletePerformanceBudgets(currentUser.uid)
+        accountDao.deletePerformanceAccounts(currentUser.uid)
+    }
+
     suspend fun addTransaction(t: Transaction) {
         transactionDao.insertTransaction(t.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("transactions", t.id).set(t.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun updateTransaction(t: Transaction) {
         transactionDao.insertTransaction(t.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("transactions", t.id).set(t.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun deleteTransaction(t: Transaction) {
         transactionDao.deleteTransaction(t.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("transactions", t.id).delete().await() } catch (_: Exception) {}
         }
     }
 
     suspend fun addAccount(a: Account) {
         accountDao.insertAccount(a.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("accounts", a.id).set(a.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun updateAccount(a: Account) {
         accountDao.updateAccount(a.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("accounts", a.id).set(a.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun deleteAccount(a: Account) {
         accountDao.deleteAccount(a.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("accounts", a.id).delete().await() } catch (_: Exception) {}
         }
     }
 
     suspend fun addAccountGroup(g: AccountGroup) {
         accountGroupDao.insertGroup(g.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("account_groups", g.id).set(g.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun updateAccountGroup(g: AccountGroup) {
         accountGroupDao.updateGroup(g.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("account_groups", g.id).set(g.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun deleteAccountGroup(g: AccountGroup) {
         accountGroupDao.deleteGroup(g.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("account_groups", g.id).delete().await() } catch (_: Exception) {}
         }
     }
 
     suspend fun addBudget(b: Budget) {
         budgetDao.insertBudget(b.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("budgets", b.id).set(b.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun updateBudget(b: Budget) {
         budgetDao.updateBudget(b.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("budgets", b.id).set(b.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun deleteBudget(b: Budget) {
         budgetDao.deleteBudget(b.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("budgets", b.id).delete().await() } catch (_: Exception) {}
         }
     }
 
     suspend fun addBudgetGroup(g: BudgetGroup) {
         budgetDao.insertBudgetGroup(g.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("budget_groups", g.id).set(g.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun updateBudgetGroup(g: BudgetGroup) {
         budgetDao.updateBudgetGroup(g.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("budget_groups", g.id).set(g.toMap()).await() } catch (_: Exception) {}
         }
     }
 
     suspend fun deleteBudgetGroup(g: BudgetGroup) {
         budgetDao.deleteBudgetGroup(g.toEntity(userId))
-        if (userId != "anonymous") {
+        if (auth.currentUser?.isAnonymous == false) {
             try { userDoc("budget_groups", g.id).delete().await() } catch (_: Exception) {}
         }
     }

@@ -15,11 +15,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.LinkedHashMap
 
 data class HomeUiState(
     val balanceData: BalanceData? = null,
@@ -73,8 +75,32 @@ class FinancialViewModel(
     private val _homeUiState = MutableStateFlow(HomeUiState(isLoading = true))
     val homeUiState: StateFlow<HomeUiState> = _homeUiState.asStateFlow()
 
+    private val _reportTransactions = MutableStateFlow<List<Transaction>>(emptyList())
+    val reportTransactions: StateFlow<List<Transaction>> = _reportTransactions.asStateFlow()
+    private var reportTransactionsJob: Job? = null
+
+    fun loadReportTransactions(startDateMillis: Long) {
+        reportTransactionsJob?.cancel()
+        _reportTransactions.value = emptyList()
+        reportTransactionsJob = viewModelScope.launch {
+            repository.getReportTransactions(startDateMillis).collect { transactions ->
+                _reportTransactions.value = transactions
+            }
+        }
+    }
+
+    private fun clearAccountScopedUiData() {
+        reportTransactionsJob?.cancel()
+        reportTransactionsJob = null
+        _reportTransactions.value = emptyList()
+        aiResponseCache.clear()
+        _streamingAiText.value = ""
+    }
+
     private val _statsUiState = MutableStateFlow(StatisticsUiState(isLoading = true))
     val statsUiState: StateFlow<StatisticsUiState> = _statsUiState.asStateFlow()
+
+    private var homeDataJob: Job? = null
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val chatMessages: StateFlow<List<ChatMessage>> = authRepository.authStateFlow
@@ -89,10 +115,26 @@ class FinancialViewModel(
     private val _chatHistoryError = MutableStateFlow<String?>(null)
     val chatHistoryError: StateFlow<String?> = _chatHistoryError.asStateFlow()
 
+    private val _isPerformanceSeedRunning = MutableStateFlow(false)
+    val isPerformanceSeedRunning: StateFlow<Boolean> = _isPerformanceSeedRunning.asStateFlow()
+
+    private val _performanceSeedStatus = MutableStateFlow<String?>(null)
+    val performanceSeedStatus: StateFlow<String?> = _performanceSeedStatus.asStateFlow()
+
+    private val _streamingAiText = MutableStateFlow("")
+    val streamingAiText: StateFlow<String> = _streamingAiText.asStateFlow()
+
+    private val aiResponseCache = object : LinkedHashMap<String, String>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean {
+            return size > 32
+        }
+    }
+
     fun sendMessageToAi(userQuery: String, apiKey: String = "") {
         val query = userQuery.trim()
         if (query.isEmpty() || _isAiThinking.value) return
         _isAiThinking.value = true
+        _streamingAiText.value = ""
         viewModelScope.launch {
             try {
                 val userMsg = ChatMessage(sender = "user", message = query)
@@ -101,11 +143,11 @@ class FinancialViewModel(
                 val state = homeUiState.value
                 val accountsSummary = state.accounts.joinToString("; ") { "${it.name}: ${it.balance}" }
                 val budgetsSummary = state.budgets.joinToString("; ") { "${it.name}: ${it.spent}/${it.amount}" }
+                val recentTransactions = state.transactions.sortedByDescending { it.date }.take(150)
                 val accountsById = state.accounts.associateBy { it.id }
                 val budgetsById = state.budgets.associateBy { it.id }
                 val transactionDateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-                val transactionRecords = state.transactions
-                .sortedByDescending { it.date }
+                val transactionRecords = recentTransactions
                 .joinToString("\n") { transaction ->
                     val typeDescription = when (transaction.type) {
                         TransactionType.INCOME -> "income received"
@@ -153,13 +195,28 @@ class FinancialViewModel(
                     "- $fields"
                 }
 
+                val cacheKey = listOf(
+                    authRepository.currentUser?.uid ?: "anonymous",
+                    query.lowercase(Locale.ROOT),
+                    accountsSummary,
+                    budgetsSummary,
+                    recentTransactions.joinToString("|") {
+                        "${it.id}:${it.type}:${it.amount}:${it.date}:${it.status}:${it.budgetId}"
+                    }
+                ).joinToString("||")
+
+                aiResponseCache[cacheKey]?.let { cachedResponse ->
+                    repository.addChatMessage(ChatMessage(sender = "ai", message = cachedResponse))
+                    return@launch
+                }
+
                 val prompt = """
                 You are an expert personal financial advisor assistant.
-                The following transaction list contains every transaction currently loaded in the app, with all available transaction fields. Use the explicit type and status; do not infer the transaction type from its amount sign, category, payee, or description. INCOME is money received and must never be counted as spending. EXPENSE is spending. TRANSFER and EXCHANGE are movements between accounts/holdings and are not ordinary income or expenses. ADJUSTMENT changes a balance and is not ordinary income or spending. BUY is an investment purchase; SELL is an investment sale. Distinguish investment proceeds/purchases from ordinary income/expenses. Respect transaction status and do not treat PLANNED transactions as completed.
+                The following transaction list contains the 150 most recent transactions in the app. Use the explicit type and status; do not infer the transaction type from its amount sign, category, payee, or description. INCOME is money received and must never be counted as spending. EXPENSE is spending. TRANSFER and EXCHANGE are movements between accounts/holdings and are not ordinary income or expenses. ADJUSTMENT changes a balance and is not ordinary income or spending. BUY is an investment purchase; SELL is an investment sale. Distinguish investment proceeds/purchases from ordinary income/expenses. Respect transaction status and do not treat PLANNED transactions as completed.
                 Here is the user's current financial context:
                 Accounts: $accountsSummary
                 Budgets: $budgetsSummary
-                All Transactions (newest first):
+                Recent Transactions (newest first):
                 $transactionRecords
 
                     User question: "$query"
@@ -174,9 +231,17 @@ class FinancialViewModel(
                     modelName = "gemini-3.5-flash-lite",
                     apiKey = key
                 )
-                val response = generativeModel.generateContent(prompt)
-                val aiReply = response.text ?: "I couldn't process that request right now."
+                var accumulatedText = ""
+                generativeModel.generateContentStream(prompt).collect { chunk ->
+                    val chunkText = chunk.text
+                    if (!chunkText.isNullOrEmpty()) {
+                        accumulatedText += chunkText
+                        _streamingAiText.value = accumulatedText
+                    }
+                }
 
+                val aiReply = accumulatedText.ifBlank { "I couldn't process that request right now." }
+                aiResponseCache[cacheKey] = aiReply
                 val aiMsg = ChatMessage(sender = "ai", message = aiReply)
                 repository.addChatMessage(aiMsg)
             } catch (e: CancellationException) {
@@ -189,12 +254,15 @@ class FinancialViewModel(
                 repository.addLocalChatMessage(errorMsg)
             } finally {
                 _isAiThinking.value = false
+                _streamingAiText.value = ""
             }
         }
     }
 
     fun clearChatHistory() {
         _chatHistoryError.value = null
+        aiResponseCache.clear()
+        _streamingAiText.value = ""
         viewModelScope.launch {
             try {
                 repository.clearChatMessages()
@@ -209,6 +277,62 @@ class FinancialViewModel(
 
     fun dismissChatHistoryError() {
         _chatHistoryError.value = null
+    }
+
+    fun seedGuestPerformanceData(count: Int) {
+        if (authRepository.currentUser?.isAnonymous != true) {
+            _performanceSeedStatus.value = "Performance data is available only for Guest accounts."
+            return
+        }
+        if (_isPerformanceSeedRunning.value) return
+
+        _isPerformanceSeedRunning.value = true
+        _performanceSeedStatus.value = "Creating $count test transactions..."
+        homeDataJob?.cancel()
+        reportTransactionsJob?.cancel()
+        _homeUiState.update { it.copy(isLoading = true) }
+        _reportTransactions.value = emptyList()
+        viewModelScope.launch(Dispatchers.IO) {
+            val startedAt = System.nanoTime()
+            try {
+                repository.seedGuestPerformanceData(count)
+                val elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000
+                _performanceSeedStatus.value =
+                    "Created $count test transactions in ${elapsedMillis} ms."
+                loadHomeData()
+            } catch (e: Exception) {
+                _performanceSeedStatus.value =
+                    "Could not create test data: ${e.localizedMessage ?: "Unknown error"}"
+            } finally {
+                _isPerformanceSeedRunning.value = false
+            }
+        }
+    }
+
+    fun clearGuestPerformanceData() {
+        if (authRepository.currentUser?.isAnonymous != true) {
+            _performanceSeedStatus.value = "Performance data can only be cleared for Guest accounts."
+            return
+        }
+        if (_isPerformanceSeedRunning.value) return
+
+        _isPerformanceSeedRunning.value = true
+        homeDataJob?.cancel()
+        reportTransactionsJob?.cancel()
+        _homeUiState.update { it.copy(isLoading = true) }
+        _reportTransactions.value = emptyList()
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                repository.clearGuestPerformanceData()
+                _performanceSeedStatus.value = "Performance test data cleared."
+                loadHomeData()
+            } catch (e: Exception) {
+                _performanceSeedStatus.value =
+                    "Could not clear test data: ${e.localizedMessage ?: "Unknown error"}"
+            } finally {
+                _isPerformanceSeedRunning.value = false
+            }
+        }
     }
 
     init {
@@ -230,18 +354,22 @@ class FinancialViewModel(
     private fun observeAuthState() {
         viewModelScope.launch {
             authRepository.authStateFlow.collect { user ->
+                clearAccountScopedUiData()
                 if (user != null) {
                     if (user.isAnonymous) {
                         _homeUiState.update { it.copy(authStatus = "Guest Mode", dbStatus = "Local DB Ready") }
+                        loadHomeData()
                     } else {
                         val name = user.displayName ?: user.email?.substringBefore("@") ?: user.uid.take(6)
                         _homeUiState.update { it.copy(authStatus = "Google ($name)", dbStatus = "Local DB Ready") }
+                        loadHomeData()
                         repository.syncFromCloud()
                         repository.listenToCloudSync(viewModelScope)
                         _homeUiState.update { it.copy(dbStatus = "Cloud Synced") }
                     }
                 } else {
                     _homeUiState.update { it.copy(authStatus = "Not Authenticated", dbStatus = "Local DB Ready") }
+                    loadHomeData()
                 }
             }
         }
@@ -663,7 +791,22 @@ class FinancialViewModel(
 
     @OptIn(FlowPreview::class)
     private fun loadHomeData() {
-        viewModelScope.launch {
+        homeDataJob?.cancel()
+        homeDataJob = viewModelScope.launch {
+            _homeUiState.update {
+                it.copy(
+                    balanceData = null,
+                    accounts = emptyList(),
+                    accountGroups = emptyList(),
+                    budgets = emptyList(),
+                    budgetGroups = emptyList(),
+                    transactions = emptyList(),
+                    remainingBudget = "$0.00",
+                    totalBudgeted = "$0.00",
+                    isLoading = true
+                )
+            }
+            _reportTransactions.value = emptyList()
             combine(
                 repository.getAccounts(),
                 repository.getAccountGroups(),

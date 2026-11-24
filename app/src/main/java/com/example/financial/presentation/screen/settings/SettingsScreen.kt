@@ -20,7 +20,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.financial.data.local.UserPreferences
 import com.example.financial.data.local.availableCurrencies
+import com.example.financial.BuildConfig
 import com.example.financial.presentation.viewmodel.AuthViewModel
+import com.example.financial.presentation.viewmodel.FinancialViewModel
 
 enum class AppThemeMode(val label: String) {
     SYSTEM("System Default"),
@@ -32,6 +34,7 @@ enum class AppThemeMode(val label: String) {
 @Composable
 fun SettingsScreen(
     authViewModel: AuthViewModel = viewModel(factory = AuthViewModel.Factory),
+    financialViewModel: FinancialViewModel = viewModel(factory = FinancialViewModel.Factory),
     userPreferences: UserPreferences? = null,
     onLogOut: () -> Unit = {}
 ) {
@@ -41,9 +44,13 @@ fun SettingsScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showThemeDialog by remember { mutableStateOf(false) }
     var showCurrencyDialog by remember { mutableStateOf(false) }
+    var showPerformanceDataDialog by remember { mutableStateOf(false) }
 
     val currentTheme by prefs.themeMode.collectAsState()
     val currentCurrency by prefs.currency.collectAsState()
+    val currentUser by authViewModel.currentUser.collectAsState()
+    val isPerformanceSeedRunning by financialViewModel.isPerformanceSeedRunning.collectAsState()
+    val performanceSeedStatus by financialViewModel.performanceSeedStatus.collectAsState()
 
     var dailyReminderEnabled by remember { mutableStateOf(true) }
     var budgetAlertsEnabled by remember { mutableStateOf(true) }
@@ -155,6 +162,47 @@ fun SettingsScreen(
         )
     }
 
+    if (showPerformanceDataDialog) {
+        AlertDialog(
+            onDismissRequest = { showPerformanceDataDialog = false },
+            title = { Text("Create Performance Test Data", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Choose the number of transactions to add to this Guest account. " +
+                            "Only __perf_ prefixed data is created; it is not sent to Firestore."
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    listOf(1_000, 5_000, 10_000).forEach { count ->
+                        TextButton(
+                            enabled = !isPerformanceSeedRunning,
+                            onClick = {
+                                financialViewModel.seedGuestPerformanceData(count)
+                                showPerformanceDataDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Create $count transactions")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !isPerformanceSeedRunning,
+                    onClick = { financialViewModel.clearGuestPerformanceData() }
+                ) {
+                    Text("Clear Test Data")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPerformanceDataDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -208,6 +256,38 @@ fun SettingsScreen(
                             subtitle = "English (US)",
                             onClick = { }
                         )
+                    }
+                }
+            }
+
+            item {
+                if (BuildConfig.DEBUG) {
+                    SettingsSectionHeader("Performance Test")
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Column {
+                            SettingsClickableItem(
+                                icon = Icons.Default.Science,
+                                title = "Guest Fake Data",
+                                subtitle = if (isPerformanceSeedRunning) {
+                                    "Creating or clearing test data..."
+                                } else {
+                                    performanceSeedStatus
+                                        ?: if (currentUser?.isAnonymous == true) {
+                                            "Create or clear local test transactions"
+                                        } else {
+                                            "Available only for Guest accounts"
+                                        }
+                                },
+                                onClick = {
+                                    if (currentUser?.isAnonymous == true) {
+                                        showPerformanceDataDialog = true
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }

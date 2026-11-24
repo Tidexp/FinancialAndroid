@@ -564,6 +564,7 @@ fun NavGraph(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 authViewModel = authViewModel,
+                financialViewModel = viewModel,
                 onLogOut = {
                     navController.navigate(Screen.Auth.route) {
                         popUpTo(0) { inclusive = true }

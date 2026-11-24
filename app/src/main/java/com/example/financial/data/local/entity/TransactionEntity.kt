@@ -5,7 +5,13 @@ import androidx.room.PrimaryKey
 import com.example.financial.domain.model.TransactionStatus
 import com.example.financial.domain.model.TransactionType
 
-@Entity(tableName = "transactions")
+@Entity(
+    tableName = "transactions",
+    indices = [
+        androidx.room.Index(value = ["date"], name = "index_transactions_date"),
+        androidx.room.Index(value = ["budgetId", "date"], name = "index_transactions_budgetId_date")
+    ]
+)
 data class TransactionEntity(
     @PrimaryKey val id: String,
     val userId: String = "anonymous",
@@ -19,6 +25,7 @@ data class TransactionEntity(
     val date: Long,
     val status: TransactionStatus,
     val memo: String? = null,
+    val budgetId: String? = null,
     // Note: tags list would normally need a converter or separate table. 
     // For simplicity I'll skip it or store as string if needed.
     val symbol: String? = null,
